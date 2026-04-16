@@ -1,0 +1,59 @@
+# ============================================
+# .gitignore — نظام التصويت الإلكتروني
+# ============================================
+
+# ─── المفاتيح (لا تُرفع أبداً!) ─────────────
+secure/
+*.pem
+*.bin
+*.key
+*.p12
+*.pfx
+
+# ─── Python ──────────────────────────────────
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/.env
+backend/.env.local
+backend/.coverage
+backend/htmlcov/
+backend/.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# ─── Flutter ─────────────────────────────────
+kiosk_app/.dart_tool/
+kiosk_app/.flutter-plugins
+kiosk_app/.flutter-plugins-dependencies
+kiosk_app/build/
+kiosk_app/android/local.properties
+kiosk_app/android/.gradle/
+kiosk_app/ios/Pods/
+kiosk_app/ios/.symlinks/
+kiosk_app/macos/Pods/
+kiosk_app/linux/flutter/ephemeral/
+kiosk_app/windows/flutter/ephemeral/
+kiosk_app/web/
+
+# ─── React / Node ────────────────────────────
+dashboard/node_modules/
+dashboard/build/
+dashboard/.env.local
+dashboard/.env.production
+
+# ─── IDE ─────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── Logs ────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
