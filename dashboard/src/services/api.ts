@@ -2,7 +2,7 @@
 
 import axios from 'axios';
 
-const BASE = 'http://localhost:5000/api';
+const BASE = 'http://209.38.44.237:5000';
 
 const http = axios.create({
   baseURL: BASE,
