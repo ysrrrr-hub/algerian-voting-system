@@ -1,8 +1,8 @@
-import psycopg2
+import psycopg
 from datetime import datetime, timezone
 import hashlib, json
 
-conn = psycopg2.connect('host=localhost dbname=voting_system user=voting_admin password=StrongPassword@2026')
+conn = psycopg.connect('host=localhost dbname=voting_system user=voting_admin password=StrongPassword@2026')
 cur = conn.cursor()
 cur.execute('SELECT block_index, timestamp, encrypted_vote, previous_hash, current_hash, nonce FROM blockchain ORDER BY block_index')
 rows = cur.fetchall()

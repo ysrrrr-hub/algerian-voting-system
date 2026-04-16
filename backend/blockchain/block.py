@@ -14,11 +14,22 @@ class Block:
         self.nonce = nonce
         self.hash = self.calculate_hash()
     
+    def to_dict(self):
+        """تحويل الكتلة إلى dictionary"""
+        return {
+            "index": self.index,
+            "timestamp": self.timestamp.isoformat(timespec='seconds'),
+            "encrypted_vote": self.encrypted_vote,
+            "previous_hash": self.previous_hash,
+            "hash": self.hash,
+            "nonce": self.nonce
+        }
+    
     def calculate_hash(self):
         """حساب SHA-256 للكتلة"""
         block_string = json.dumps({
             "index": self.index,
-            "timestamp": str(self.timestamp),
+            "timestamp": self.timestamp.isoformat(timespec='seconds'),
             "encrypted_vote": self.encrypted_vote,
             "previous_hash": self.previous_hash,
             "nonce": self.nonce

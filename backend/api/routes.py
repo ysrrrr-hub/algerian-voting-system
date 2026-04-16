@@ -4,8 +4,8 @@ Flask API Routes - نقاط النهاية الرئيسية
 
 from flask import Flask, request, jsonify, g
 from flask_cors import CORS
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 from datetime import datetime
 import os
 from dotenv import load_dotenv
@@ -24,13 +24,13 @@ CORS(app, origins=os.getenv('ALLOWED_ORIGINS', '*').split(','))
 def get_db():
     """إنشاء اتصال بقاعدة البيانات"""
     if 'db' not in g:
-        g.db = psycopg2.connect(
+        g.db = psycopg.connect(
             host=os.getenv('DB_HOST', 'localhost'),
-            port=os.getenv('DB_PORT', 5432),
-            database=os.getenv('DB_NAME', 'voting_system'),
+            port=int(os.getenv('DB_PORT', 5432)),
+            dbname=os.getenv('DB_NAME', 'voting_system'),
             user=os.getenv('DB_USER', 'voting_admin'),
             password=os.getenv('DB_PASSWORD'),
-            cursor_factory=RealDictCursor
+            row_factory=dict_row
         )
     return g.db
 
@@ -49,12 +49,13 @@ def get_blockchain():
     global _blockchain_instance
     if _blockchain_instance is None:
         # اتصال مخصص للبلوكشين (لا يُغلق مع كل طلب)
-        bc_db = psycopg2.connect(
+        bc_db = psycopg.connect(
             host=os.getenv('DB_HOST', 'localhost'),
-            port=os.getenv('DB_PORT', 5432),
-            database=os.getenv('DB_NAME', 'voting_system'),
+            port=int(os.getenv('DB_PORT', 5432)),
+            dbname=os.getenv('DB_NAME', 'voting_system'),
             user=os.getenv('DB_USER', 'postgres'),
-            password=os.getenv('DB_PASSWORD')
+            password=os.getenv('DB_PASSWORD'),
+            autocommit=False
         )
         _blockchain_instance = Blockchain(bc_db)
     return _blockchain_instance

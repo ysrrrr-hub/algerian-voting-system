@@ -1,6 +1,5 @@
 from .block import Block
-from datetime import datetime
-import psycopg2
+from datetime import datetime, timezone
 import json
 
 class Blockchain:
@@ -12,6 +11,9 @@ class Blockchain:
         # إنشاء الكتلة الأولى (Genesis Block) إذا لم توجد
         if len(self.chain) == 0:
             self.create_genesis_block()
+    
+    def __len__(self):
+        return len(self.chain)
     
     def create_genesis_block(self):
         """إنشاء أول كتلة في السلسلة (إذا لم تكن موجودة)"""
@@ -25,7 +27,7 @@ class Blockchain:
             self.load_chain_from_db()
             return
         
-        genesis = Block(0, datetime.now(), "GENESIS_BLOCK", "0")
+        genesis = Block(0, datetime.now(timezone.utc), "GENESIS_BLOCK", "0" * 64)
         self.chain.append(genesis)
         self.save_block_to_db(genesis)
     
@@ -38,7 +40,7 @@ class Blockchain:
         previous_block = self.chain[-1]
         new_block = Block(
             index=len(self.chain),
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             encrypted_vote=encrypted_vote,
             previous_hash=previous_block.hash
         )
@@ -74,10 +76,12 @@ class Blockchain:
     def save_block_to_db(self, block):
         """حفظ الكتلة في قاعدة البيانات"""
         cursor = self.db.cursor()
+        # Save timestamp as naive UTC for consistent hash calculation
+        ts_naive_utc = block.timestamp.astimezone(timezone.utc).replace(tzinfo=None) if block.timestamp.tzinfo else block.timestamp
         cursor.execute("""
             INSERT INTO blockchain (block_index, timestamp, encrypted_vote, previous_hash, current_hash, nonce)
             VALUES (%s, %s, %s, %s, %s, %s)
-        """, (block.index, block.timestamp, block.encrypted_vote, block.previous_hash, block.hash, block.nonce))
+        """, (block.index, ts_naive_utc, block.encrypted_vote, block.previous_hash, block.hash, block.nonce))
         self.db.commit()
     
     def load_chain_from_db(self):
@@ -92,9 +96,13 @@ class Blockchain:
             rows = cursor.fetchall()
             
             for row in rows:
+                ts = row[1]
+                # Ensure timestamp is UTC-aware for consistent hashing
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
                 block = Block(
                     index=row[0],
-                    timestamp=row[1],
+                    timestamp=ts,
                     encrypted_vote=row[2],
                     previous_hash=row[3],
                     nonce=row[5]

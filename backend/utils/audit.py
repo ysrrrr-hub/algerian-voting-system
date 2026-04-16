@@ -2,12 +2,21 @@
 Audit Logging Utility
 """
 
-import psycopg2
+import psycopg
 from datetime import datetime
 
+# Action type constants
+ACTION_VOTE_CAST    = "VOTE_CAST"
+ACTION_VOTE_ATTEMPT = "VOTE_ATTEMPT"
+ACTION_VOTER_CHECK  = "VOTER_CHECK"
+ACTION_ADMIN_LOGIN  = "ADMIN_LOGIN"
+ACTION_ADMIN_LOGOUT = "ADMIN_LOGOUT"
+ACTION_DECRYPT      = "DECRYPT_RESULTS"
+ACTION_CHAIN_VERIFY = "CHAIN_VERIFY"
+ACTION_KEY_GENERATE = "KEY_GENERATE"
 
 def log_action(
-    db_connection: psycopg2.extensions.connection,
+    db_connection: psycopg.Connection,
     action_type: str,
     nfc_uid: str = None,
     ip_address: str = None,
