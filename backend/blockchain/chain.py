@@ -1,286 +1,106 @@
-"""
-backend/blockchain/chain.py
-Blockchain Class — يدير سلسلة الكتل الكاملة
-
-المسؤوليات:
-  1. إنشاء Genesis Block (الكتلة الأولى)
-  2. إضافة أصوات مشفرة كـ كتل جديدة
-  3. التحقق من سلامة السلسلة (كشف أي تلاعب)
-  4. فك تشفير جميع الأصوات بعد الانتخابات
-  5. مزامنة الكتل مع قاعدة بيانات PostgreSQL
-"""
-
-import psycopg
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
-
 from .block import Block
-
+from datetime import datetime
+import psycopg2
+import json
 
 class Blockchain:
-    """
-    سلسلة البلوكشين التي تخزن جميع الأصوات المشفرة.
-
-    آلية ضمان النزاهة:
-      - كل كتلة تحمل hash الكتلة السابقة (previous_hash)
-      - تغيير أي بيانات في أي كتلة يكسر السلسلة
-      - verify_integrity() يكشف أي تلاعب في O(n)
-    """
-
-    def __init__(self, db_connection: psycopg.Connection) -> None:
+    def __init__(self, db_connection):
         self.db = db_connection
-        self.chain: List[Block] = []
-        # تحميل السلسلة الموجودة من قاعدة البيانات
-        self._load_chain_from_db()
-        # إنشاء Genesis Block إذا كانت السلسلة فارغة
-        if not self.chain:
-            self._create_genesis_block()
-
-    # ============================================================ Genesis
-    def _create_genesis_block(self) -> Block:
-        """
-        إنشاء الكتلة الأولى في السلسلة.
-
-        خصائصها الثابتة:
-          index          = 0
-          previous_hash  = "000...0" (64 صفراً — لا توجد كتلة سابقة)
-          encrypted_vote = "GENESIS_BLOCK"
-        """
-        genesis = Block(
-            index=0,
-            timestamp=datetime.now(timezone.utc),
-            encrypted_vote="GENESIS_BLOCK",
-            previous_hash="0" * 64,
-        )
+        self.chain = []
+        self.load_chain_from_db()
+        
+        # إنشاء الكتلة الأولى (Genesis Block) إذا لم توجد
+        if len(self.chain) == 0:
+            self.create_genesis_block()
+    
+    def create_genesis_block(self):
+        """إنشاء أول كتلة في السلسلة (إذا لم تكن موجودة)"""
+        cursor = self.db.cursor()
+        cursor.execute("SELECT COUNT(*) FROM blockchain WHERE block_index = 0")
+        count = cursor.fetchone()[0]
+        cursor.close()
+        
+        if count > 0:
+            # Genesis block already exists, load it instead
+            self.load_chain_from_db()
+            return
+        
+        genesis = Block(0, datetime.now(), "GENESIS_BLOCK", "0")
         self.chain.append(genesis)
-        self._save_block_to_db(genesis)
-        print("✅ Genesis Block created")
-        return genesis
-
-    # ============================================================ Add vote
-    def add_vote(
-        self,
-        vote_data: Dict[str, Any],
-        public_key_path: str,
-    ) -> str:
-        """
-        إضافة صوت جديد للبلوكشين.
-
-        الخطوات:
-          1. تشفير الصوت بـ RSA-4096
-          2. جلب hash آخر كتلة (للربط)
-          3. إنشاء كتلة جديدة وحساب SHA-256 hash
-          4. حفظ في الذاكرة + قاعدة البيانات
-
-        Returns:
-            str — SHA-256 hash الكتلة الجديدة (يُستخدم كإيصال QR)
-        """
+        self.save_block_to_db(genesis)
+    
+    def add_vote(self, vote_data, public_key_path):
+        """إضافة صوت جديد"""
+        # 1. تشفير الصوت
         encrypted_vote = Block.encrypt_vote(vote_data, public_key_path)
+        
+        # 2. إنشاء كتلة جديدة
         previous_block = self.chain[-1]
-
         new_block = Block(
             index=len(self.chain),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(),
             encrypted_vote=encrypted_vote,
-            previous_hash=previous_block.hash,
+            previous_hash=previous_block.hash
         )
+        
+        # 3. Mining: Find nonce such that hash starts with '0000'
+        target = '0000'
+        while not new_block.hash.startswith(target):
+            new_block.nonce += 1
+            new_block.hash = new_block.calculate_hash()
 
+        # 4. إضافة للسلسلة وقاعدة البيانات
         self.chain.append(new_block)
-        self._save_block_to_db(new_block)
-
-        print(
-            f"✅ Block #{new_block.index} added | "
-            f"hash={new_block.hash[:16]}…"
-        )
-        return new_block.hash
-
-    # ============================================================ Verify
-    def verify_integrity(self) -> Tuple[bool, str]:
-        """
-        التحقق من سلامة السلسلة بالكامل — O(n).
-
-        لكل كتلة يُجري فحصين:
-          1. إعادة حساب hash والمقارنة بالمخزّن
-             (يكشف تعديل أي حقل في الكتلة)
-          2. مقارنة previous_hash بـ hash الكتلة السابقة
-             (يكشف إضافة/حذف كتل أو اختلال التسلسل)
-
-        Returns:
-            (True,  رسالة نجاح) أو (False, وصف الخلل)
-        """
-        if len(self.chain) <= 1:
-            return True, "Blockchain is valid (genesis block only)"
-
+        self.save_block_to_db(new_block)
+        
+        return new_block.hash  # إرجاع الـ hash لتوليد QR Code
+    
+    def verify_integrity(self):
+        """التحقق من سلامة السلسلة"""
         for i in range(1, len(self.chain)):
-            current  = self.chain[i]
-            previous = self.chain[i - 1]
-
-            # فحص 1 — سلامة hash الكتلة الحالية
-            recalculated = current.calculate_hash()
-            if current.hash != recalculated:
-                return False, (
-                    f"Block {i}: hash mismatch! "
-                    f"stored={current.hash[:16]}… "
-                    f"calculated={recalculated[:16]}…"
-                )
-
-            # فحص 2 — سلامة الربط بالكتلة السابقة
+            current = self.chain[i]
+            previous = self.chain[i-1]
+            
+            # فحص 1: هل الـ hash محسوب بشكل صحيح؟
+            if current.hash != current.calculate_hash():
+                return False, f"Block {i}: Hash mismatch"
+            
+            # فحص 2: هل الربط بالكتلة السابقة صحيح؟
             if current.previous_hash != previous.hash:
-                return False, (
-                    f"Block {i}: chain broken! "
-                    f"expected_prev={previous.hash[:16]}… "
-                    f"got={current.previous_hash[:16]}…"
-                )
-
-        return True, (
-            f"Blockchain is valid "
-            f"({len(self.chain)} blocks verified ✓)"
-        )
-
-    # ============================================================ Decrypt all
-    def decrypt_all_votes(
-        self,
-        private_key_path: str,
-        password: str,
-    ) -> List[Dict[str, Any]]:
-        """
-        فك تشفير جميع الأصوات (للفرز بعد الانتخابات).
-
-        يتخطى Genesis Block (index=0).
-
-        Returns:
-            [{'candidate_id', 'nfc_uid', 'voted_at', 'block_index', ...}]
-        """
-        results: List[Dict[str, Any]] = []
-        failed = 0
-
-        for block in self.chain[1:]:
-            try:
-                vote = Block.decrypt_vote(
-                    block.encrypted_vote,
-                    private_key_path,
-                    password,
-                )
-                vote["block_index"] = block.index
-                vote["timestamp"]   = block.timestamp.isoformat()
-                vote["block_hash"]  = block.hash
-                results.append(vote)
-            except Exception as exc:
-                failed += 1
-                print(f"⚠️  Block {block.index} decryption failed: {exc}")
-
-        print(
-            f"✅ Decrypted {len(results)} votes "
-            f"({failed} failed)"
-        )
-        return results
-
-    # ============================================================ Results
-    def get_results(
-        self,
-        private_key_path: str,
-        password: str,
-    ) -> Dict[int, int]:
-        """
-        حساب عدد الأصوات لكل مرشح.
-
-        Returns:
-            {candidate_id: vote_count}
-        """
-        votes = self.decrypt_all_votes(private_key_path, password)
-        tally: Dict[int, int] = {}
-        for v in votes:
-            cid = v["candidate_id"]
-            tally[cid] = tally.get(cid, 0) + 1
-        return tally
-
-    # ============================================================ DB helpers
-    def _save_block_to_db(self, block: Block) -> None:
-        """حفظ كتلة في جدول blockchain."""
+                return False, f"Block {i}: Chain broken"
+        
+        return True, "Blockchain is valid"
+    
+    def save_block_to_db(self, block):
+        """حفظ الكتلة في قاعدة البيانات"""
+        cursor = self.db.cursor()
+        cursor.execute("""
+            INSERT INTO blockchain (block_index, timestamp, encrypted_vote, previous_hash, current_hash, nonce)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (block.index, block.timestamp, block.encrypted_vote, block.previous_hash, block.hash, block.nonce))
+        self.db.commit()
+    
+    def load_chain_from_db(self):
+        """تحميل السلسلة من قاعدة البيانات عند بدء التشغيل"""
         cursor = self.db.cursor()
         try:
-            cursor.execute(
-                """
-                INSERT INTO blockchain
-                    (block_index, timestamp, encrypted_vote,
-                     previous_hash, current_hash, nonce)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (block_index) DO NOTHING
-                """,
-                (
-                    block.index,
-                    block.timestamp.astimezone(timezone.utc).replace(tzinfo=None),
-                    block.encrypted_vote,
-                    block.previous_hash,
-                    block.hash,
-                    block.nonce,
-                ),
-            )
-            self.db.commit()
-        finally:
-            cursor.close()
-
-    def _load_chain_from_db(self) -> None:
-        """تحميل السلسلة الكاملة من قاعدة البيانات عند بدء التشغيل."""
-        cursor = self.db.cursor()
-        try:
-            cursor.execute(
-                """
-                SELECT block_index, timestamp, encrypted_vote,
-                       previous_hash, current_hash, nonce
-                FROM blockchain
-                ORDER BY block_index ASC
-                """
-            )
+            cursor.execute("""
+                SELECT block_index, timestamp, encrypted_vote, 
+                       previous_hash, current_hash, nonce 
+                FROM blockchain ORDER BY block_index ASC
+            """)
             rows = cursor.fetchall()
-        finally:
-            cursor.close()
-
-        for row in rows:
-            # دعم كل من dict (RealDictCursor) وtuple
-            if isinstance(row, dict):
-                idx, ts, ev = row["block_index"], row["timestamp"], row["encrypted_vote"]
-                ph, ch, nc  = row["previous_hash"], row["current_hash"], row["nonce"]
-            else:
-                idx, ts, ev, ph, ch, nc = row
-
-            if isinstance(ts, datetime):
-                tz_aware_ts = ts.astimezone(timezone.utc) if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
-            else:
-                parsed_ts = datetime.fromisoformat(str(ts))
-                tz_aware_ts = parsed_ts.astimezone(timezone.utc) if parsed_ts.tzinfo else parsed_ts.replace(tzinfo=timezone.utc)
-
-            block = Block(
-                index=idx,
-                timestamp=tz_aware_ts,
-                encrypted_vote=ev,
-                previous_hash=ph,
-                nonce=nc or 0,
-            )
-            # استخدام الـ hash المخزّن — لا نُعيد حسابه
-            block.hash = ch
-            self.chain.append(block)
-
-        if self.chain:
-            print(f"✅ Loaded {len(self.chain)} blocks from database")
-
-    # ============================================================ Properties
-    @property
-    def last_block(self) -> Optional[Block]:
-        return self.chain[-1] if self.chain else None
-
-    @property
-    def total_votes(self) -> int:
-        """عدد الأصوات الفعلية (السلسلة ناقص Genesis Block)."""
-        return max(0, len(self.chain) - 1)
-
-    def __len__(self) -> int:
-        return len(self.chain)
-
-    def __repr__(self) -> str:
-        last = self.chain[-1].hash[:16] if self.chain else "N/A"
-        return (
-            f"Blockchain(blocks={len(self.chain)}, "
-            f"votes={self.total_votes}, "
-            f"last={last}…)"
-        )
+            
+            for row in rows:
+                block = Block(
+                    index=row[0],
+                    timestamp=row[1],
+                    encrypted_vote=row[2],
+                    previous_hash=row[3],
+                    nonce=row[5]
+                )
+                block.hash = row[4]
+                self.chain.append(block)
+        except Exception as e:
+            print(f"Error loading chain: {e}")
+            self.db.rollback()
