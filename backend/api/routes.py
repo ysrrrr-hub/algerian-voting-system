@@ -83,32 +83,37 @@ def root():
 
 @app.route('/api/admin/login', methods=['POST'])
 def admin_login():
-    """
-    تسجيل دخول المشرفين بثلاثة مفاتيح
-    
-    Body: {"master_key": "key1-key2-key3"}
-    """
-    data = request.json
-    master_key = data.get('master_key')
-    
-    # التحقق من المفتاح (في الإنتاج: استخدم bcrypt)
-    VALID_KEY = "admin123-super456-secure789"  # DEMO ONLY!
-    
-    if master_key == VALID_KEY:
-        # إنشاء token جلسة (في الإنتاج: JWT)
-        import secrets
-        token = secrets.token_hex(32)
-        
-        log_action(get_db(), 'ADMIN_LOGIN', None, request.remote_addr, True)
-        
-        return jsonify({
-            'success': True,
-            'token': token,
-            'expires_in': 3600
-        })
-    else:
-        log_action(get_db(), 'ADMIN_LOGIN', None, request.remote_addr, False, 'Invalid key')
-        return jsonify({'error': 'مفاتيح خاطئة / Invalid keys'}), 401
+    """تسجيل دخول المشرف بـ username + password باستخدام bcrypt"""
+    import bcrypt, secrets
+    data = request.json or {}
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+
+    if not username or not password:
+        return jsonify({'error': 'بيانات ناقصة / Missing credentials'}), 400
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "SELECT admin_id, username, password_hash, is_active FROM admin_users WHERE username=%s",
+        (username,)
+    )
+    row = cursor.fetchone()
+
+    if row and row['is_active']:
+        pw_hash = row['password_hash'].encode() if isinstance(row['password_hash'], str) else row['password_hash']
+        if bcrypt.checkpw(password.encode('utf-8'), pw_hash):
+            token = secrets.token_hex(32)
+            log_action(db, 'ADMIN_LOGIN', None, request.remote_addr, True)
+            return jsonify({
+                'success': True,
+                'token': token,
+                'username': username,
+                'expires_in': 3600
+            })
+
+    log_action(db, 'ADMIN_LOGIN', None, request.remote_addr, False, 'Invalid credentials')
+    return jsonify({'error': 'بيانات خاطئة / Invalid credentials'}), 401
 
 # ==================== Voter Endpoints ====================
 
