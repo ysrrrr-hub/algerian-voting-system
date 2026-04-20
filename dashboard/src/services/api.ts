@@ -47,8 +47,8 @@ export interface AdminInfo {
 export interface LoginResponse {
   success:    boolean;
   token:      string;
+  username:   string;
   expires_in: number;
-  admin:      AdminInfo;
 }
 
 export interface DecryptResult {
@@ -73,20 +73,20 @@ export interface WilayaStats {
 }
 
 // ─── API calls ──────────────────────────────────────────────────
-export const apiHealth         = ()              => http.get('/health');
-export const apiStats          = ()              => http.get<VotingStats>('/stats');
-export const apiVerifyChain    = ()              => http.get<ChainStatus>('/verify-chain');
-export const apiBlockchainStatus = ()            => http.get<BlockchainStatus>('/blockchain/status');
+export const apiHealth         = ()              => http.get('/api/health');
+export const apiStats          = ()              => http.get<VotingStats>('/api/stats');
+export const apiVerifyChain    = ()              => http.get<ChainStatus>('/api/verify-chain');
+export const apiBlockchainStatus = ()            => http.get<BlockchainStatus>('/api/blockchain/status');
 
 export const apiLogin = (username: string, password: string) =>
-  http.post<LoginResponse>('/admin/login', { username, password });
+  http.post<LoginResponse>('/api/admin/login', { username, password });
 
 export const apiLogout = (token: string) =>
-  http.post('/admin/logout', {}, { headers: { Authorization: `Bearer ${token}` } });
+  http.post('/api/admin/logout', {}, { headers: { Authorization: `Bearer ${token}` } });
 
 export const apiDecryptVotes = (token: string, password: string) =>
   http.post<DecryptResponse>(
-    '/decrypt-votes',
+    '/api/decrypt-votes',
     { private_key_password: password },
     { headers: { Authorization: `Bearer ${token}` } },
   );
@@ -132,7 +132,7 @@ export const apiAuditLog = (
   actionType?: string,
   limit  = 200,
   offset = 0,
-) => http.get<AuditLogResponse>('/audit-log', {
+) => http.get<AuditLogResponse>('/api/audit-log', {
   headers: { Authorization: `Bearer ${token}` },
   params:  { action_type: actionType, limit, offset },
 });
@@ -142,13 +142,13 @@ export const apiAllBlocks = (
   token:  string,
   limit  = 100,
   offset = 0,
-) => http.get<AllBlocksResponse>('/blockchain/all', {
+) => http.get<AllBlocksResponse>('/api/blockchain/all', {
   headers: { Authorization: `Bearer ${token}` },
   params:  { limit, offset },
 });
 
 /** إحصائيات حسب الولاية */
 export const apiWilayaStats = (token: string) =>
-  http.get<WilayaStats[]>('/stats/wilaya', {
+  http.get<WilayaStats[]>('/api/stats/wilaya', {
     headers: { Authorization: `Bearer ${token}` },
   });

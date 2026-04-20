@@ -23,11 +23,15 @@ const LoginPage: React.FC<Props> = ({ onLogin }) => {
     setLoading(true); setError('');
     try {
       const { data } = await apiLogin(username, password);
-      if (data.success) onLogin(data.token, data.admin);
+      if (data.success) {
+        localStorage.setItem('auth_token', data.token);
+        localStorage.setItem('auth_user', data.username);
+        localStorage.setItem('auth_expires', String(Date.now() + data.expires_in * 1000));
+        onLogin(data.token, { full_name: data.username, role: 'مشرف / Superviseur' });
+      }
     } catch (err: any) {
       setError(
-        err.response?.data?.error_ar
-        || err.response?.data?.error_fr
+        err.response?.data?.error
         || 'خطأ في الاتصال — Erreur de connexion',
       );
     } finally { setLoading(false); }
