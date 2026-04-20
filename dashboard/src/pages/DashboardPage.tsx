@@ -15,7 +15,7 @@ import {
 import BlockchainChart, { ChartPoint } from '../components/BlockchainChart';
 import IntegrityBadge from '../components/IntegrityBadge';
 import StatsCard from '../components/StatsCard';
-import { useSocket } from '../hooks/useSocket';
+
 import {
   apiBlockchainStatus, apiStats, apiVerifyChain,
   BlockchainStatus, ChainStatus, VotingStats,
@@ -36,30 +36,7 @@ const DashboardPage: React.FC<Props> = ({ adminName }) => {
   const [loading,  setLoading]  = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  // ─── Socket.IO عبر custom hook ──────────────────────────
-  const { connected } = useSocket({
-    url: 'http://localhost:5000',
-    onNewVote: (data) => {
-      setStats(prev => ({
-        ...prev,
-        voted_count:        prev.voted_count + 1,
-        remaining_count:    Math.max(0, prev.remaining_count - 1),
-        blockchain_length:  data.blockchain_length ?? prev.blockchain_length + 1,
-        last_vote_time:     data.timestamp,
-        turnout_percentage: prev.total_voters > 0
-          ? ((prev.voted_count + 1) / prev.total_voters) * 100
-          : 0,
-      }));
-      setChart(prev => [
-        ...prev.slice(-29),
-        {
-          time:   new Date(data.timestamp).toLocaleTimeString('ar-DZ'),
-          votes:  1,
-          blocks: data.blockchain_length ?? prev.length + 2,
-        },
-      ]);
-    },
-  });
+
 
   // ─── جلب البيانات ───────────────────────────────────────────
   const fetchAll = useCallback(async () => {
@@ -96,11 +73,6 @@ const DashboardPage: React.FC<Props> = ({ adminName }) => {
           <Typography sx={{ fontFamily: 'Tajawal', fontSize: 13, color: '#5A7062' }}>
             Tableau de bord en direct — مرحباً {adminName} •{' '}
             آخر تحديث: {lastRefresh.toLocaleTimeString('ar-DZ')}
-            {connected && (
-              <Box component="span" sx={{ ml: 1, color: '#28A745', fontWeight: 600 }}>
-                ● متصل
-              </Box>
-            )}
           </Typography>
         </Box>
         <Tooltip title="تحديث البيانات">
@@ -193,9 +165,9 @@ const DashboardPage: React.FC<Props> = ({ adminName }) => {
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                   {[
                     { label: 'رقم الكتلة', value: `#${bcStatus.last_block.index}` },
-                    { label: 'الوقت', value: new Date(bcStatus.last_block.timestamp).toLocaleTimeString('ar-DZ') },
-                    { label: 'Hash', value: `${bcStatus.last_block.current_hash.substring(0, 12)}…`, mono: true },
-                    { label: 'Nonce', value: String(bcStatus.last_block.nonce) },
+                    { label: 'الوقت', value: bcStatus.last_block.timestamp ? new Date(bcStatus.last_block.timestamp).toLocaleTimeString('ar-DZ') : '—' },
+                    { label: 'Hash', value: `${(bcStatus.last_block.current_hash || '').substring(0, 12)}…`, mono: true },
+                    { label: 'Nonce', value: String(bcStatus.last_block.nonce || 0) },
                   ].map(item => (
                     <Box key={item.label} sx={{
                       display: 'flex', justifyContent: 'space-between',

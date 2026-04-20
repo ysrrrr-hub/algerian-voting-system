@@ -283,14 +283,75 @@ def blockchain_status():
 @app.route('/api/stats', methods=['GET'])
 def get_statistics():
     """إحصائيات التصويت الحية"""
-    db = get_db()
-    cursor = db.cursor()
-    
-    cursor.execute("SELECT * FROM voting_statistics")
-    stats = cursor.fetchone()
-    cursor.close()
-    
-    return jsonify(stats)
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        
+        cursor.execute("SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE has_voted = TRUE) as voted, MAX(voted_at) as last_vote FROM voters")
+        row = cursor.fetchone()
+        
+        total_voters = row['total'] if row and row['total'] else 0
+        voted_count = row['voted'] if row and row['voted'] else 0
+        remaining_count = total_voters - voted_count
+        turnout_percentage = (voted_count / total_voters * 100) if total_voters > 0 else 0
+        
+        chain_len = len(get_blockchain())
+        
+        last_vote_time = None
+        if row and row['last_vote']:
+            last_vote_time = row['last_vote'].isoformat()
+            
+        return jsonify({
+            'total_voters': total_voters,
+            'voted_count': voted_count,
+            'remaining_count': remaining_count,
+            'turnout_percentage': turnout_percentage,
+            'blockchain_length': chain_len,
+            'last_vote_time': last_vote_time
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
+
+@app.route('/api/stats/wilaya', methods=['GET'])
+def get_wilaya_stats():
+    """إحصائيات حسب الولاية"""
+    # TODO: إضافة تحقق من Token المشرف
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                wilaya, 
+                COUNT(*) as total_voters, 
+                COUNT(*) FILTER (WHERE has_voted = TRUE) as voted_count
+            FROM voters
+            GROUP BY wilaya
+            ORDER BY total_voters DESC
+        """)
+        rows = cursor.fetchall()
+        
+        results = []
+        for row in rows:
+            t = row['total_voters'] or 0
+            v = row['voted_count'] or 0
+            pct = (v / t * 100) if t > 0 else 0
+            results.append({
+                'wilaya': row['wilaya'],
+                'total_voters': t,
+                'voted_count': v,
+                'turnout_pct': pct
+            })
+            
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
 
 # ==================== Decryption Endpoint ====================
 
@@ -355,6 +416,89 @@ def decrypt_votes():
     except ValueError as e:
         log_action(db, 'DECRYPT_RESULTS', None, request.remote_addr, False, str(e))
         return jsonify({'error': 'فك التشفير فشل / Decryption failed', 'details': str(e)}), 400
+
+# ==================== Missing Endpoints ====================
+
+@app.route('/api/audit-log', methods=['GET'])
+def get_audit_log():
+    try:
+        limit = int(request.args.get('limit', 200))
+        offset = int(request.args.get('offset', 0))
+        action_type = request.args.get('action_type')
+        
+        db = get_db()
+        cursor = db.cursor()
+        
+        base_query = "FROM audit_log"
+        params = []
+        if action_type:
+            base_query += " WHERE action_type = %s"
+            params.append(action_type)
+            
+        cursor.execute(f"SELECT COUNT(*) as t {base_query}", tuple(params))
+        total_row = cursor.fetchone()
+        total = total_row['t'] if total_row else 0
+        
+        cursor.execute(f"SELECT log_id, action_type, nfc_uid, ip_address, success, error_message, timestamp {base_query} ORDER BY timestamp DESC LIMIT %s OFFSET %s", tuple(params + [limit, offset]))
+        rows = cursor.fetchall()
+        
+        logs = []
+        for r in rows:
+            logs.append({
+                'log_id': r['log_id'],
+                'action_type': r['action_type'],
+                'nfc_uid': r['nfc_uid'],
+                'ip_address': r['ip_address'],
+                'success': r['success'],
+                'error_message': r['error_message'],
+                'timestamp': r['timestamp'].isoformat() if r['timestamp'] else None
+            })
+            
+        return jsonify({
+            'logs': logs,
+            'total': total,
+            'limit': limit,
+            'offset': offset
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
+
+@app.route('/api/blockchain/all', methods=['GET'])
+def get_all_blocks():
+    try:
+        limit = int(request.args.get('limit', 100))
+        offset = int(request.args.get('offset', 0))
+        
+        chain = get_blockchain().chain
+        total = len(chain)
+        
+        # apply offset and limit
+        # Reverse order, latest blocks first
+        reversed_chain = chain[::-1]
+        paginated = reversed_chain[offset:offset+limit]
+        
+        blocks = []
+        for b in paginated:
+            blocks.append({
+                'block_index': b.index,
+                'timestamp': datetime.fromtimestamp(b.timestamp).isoformat() if isinstance(b.timestamp, float) else (b.timestamp.isoformat() if hasattr(b.timestamp, 'isoformat') else str(b.timestamp)),
+                'encrypted_vote': b.encrypted_vote,
+                'previous_hash': b.previous_hash,
+                'current_hash': b.hash,
+                'nonce': b.nonce
+            })
+            
+        return jsonify({
+            'blocks': blocks,
+            'total': total,
+            'limit': limit,
+            'offset': offset
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ==================== Health Check ====================
 

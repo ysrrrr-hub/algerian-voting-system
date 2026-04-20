@@ -27,7 +27,7 @@ const BlockCard: React.FC<{ block: BlockRecord; isGenesis: boolean }> = ({ block
   const [open, setOpen] = useState(block.block_index === 0);
 
   const shortHash = (h: string) =>
-    h.length >= 16 ? `${h.substring(0,8)}…${h.slice(-8)}` : h;
+    (h && h.length >= 16) ? `${h.substring(0,8)}…${h.slice(-8)}` : (h || '—');
 
   return (
     <Card sx={{ borderRadius: 3, mb: 1.5, border: isGenesis ? '1px solid #006233' : '1px solid #DDE8DF' }}>
@@ -86,7 +86,7 @@ const BlockCard: React.FC<{ block: BlockRecord; isGenesis: boolean }> = ({ block
             { label: 'Previous Hash', value: block.previous_hash,                 mono: true  },
             { label: 'Nonce',         value: String(block.nonce),                 mono: true  },
             { label: 'الصوت',
-              value: isGenesis ? 'GENESIS_BLOCK' : `[مشفر RSA-4096 — ${block.encrypted_vote.length} حرف]`,
+              value: isGenesis ? 'GENESIS_BLOCK' : `[مشفر RSA-4096 — ${(block.encrypted_vote || '').length} حرف]`,
               mono: false },
           ].map(row => (
             <Box key={row.label} sx={{
