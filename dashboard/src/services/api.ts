@@ -2,7 +2,7 @@
 
 import axios from 'axios';
 
-const BASE = 'http://209.38.44.237:5000';
+const BASE = ''; // استخدم مسارات نسبية — Nginx يتكفل بالتوجيه
 
 const http = axios.create({
   baseURL: BASE,

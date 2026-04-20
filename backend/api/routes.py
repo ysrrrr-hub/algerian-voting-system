@@ -85,7 +85,7 @@ def root():
 def admin_login():
     """تسجيل دخول المشرف بـ username + password باستخدام bcrypt"""
     import bcrypt, secrets
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     username = (data.get('username') or '').strip()
     password = data.get('password') or ''
 
