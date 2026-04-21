@@ -17,7 +17,7 @@ from utils.audit import log_action
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, origins=os.getenv('ALLOWED_ORIGINS', '*').split(','))
+CORS(app, resources={r"/*": {"origins": ["https://evotingdz.live", "https://www.evotingdz.live", "http://209.38.44.237:3000"]}})
 
 # ==================== Database Connection ====================
 

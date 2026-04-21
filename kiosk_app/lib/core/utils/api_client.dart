@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 // ─── Endpoints ──────────────────────────────────────────────────
 abstract class ApiEndpoints {
   // غيّر هذا العنوان حسب بيئة التشغيل
-  static const String _base = 'http://localhost:5000/api';
+  static const String _base = 'https://evotingdz.live/api';
 
   static const String health      = '$_base/health';
   static const String candidates  = '$_base/candidates';
