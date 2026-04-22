@@ -127,10 +127,14 @@ def check_voter_status(nfc_uid):
     db = get_db()
     cursor = db.cursor()
     
-    # استخدام الدالة المخزنة
-    cursor.execute("SELECT * FROM check_voter_eligibility(%s)", (nfc_uid,))
-    result = cursor.fetchone()
-    cursor.close()
+    try:
+        cursor.execute(
+            "SELECT voter_id, nfc_uid, full_name_ar, full_name_fr, has_voted FROM voters WHERE nfc_uid=%s",
+            (nfc_uid,)
+        )
+        result = cursor.fetchone()
+    finally:
+        cursor.close()
     
     if not result:
         log_action(db, 'VOTER_CHECK', nfc_uid, request.remote_addr, False, 'Not found')
@@ -138,14 +142,15 @@ def check_voter_status(nfc_uid):
             'error': 'بطاقة غير مسجلة / Carte non enregistrée'
         }), 404
     
+    has_voted = result['has_voted']
     log_action(db, 'VOTER_CHECK', nfc_uid, request.remote_addr, True)
     
     return jsonify({
-        'eligible': result['eligible'],
-        'message': result['message'],
-        'name_ar': result['voter_name_ar'],
-        'name_fr': result['voter_name_fr'],
-        'has_voted': not result['eligible']  # إذا غير مؤهل = صوّت أو غير مسجل
+        'eligible': not has_voted,
+        'message': 'صوّت مسبقاً / Déjà voté' if has_voted else 'مؤهل للتصويت / Éligible',
+        'name_ar': result['full_name_ar'] or '',
+        'name_fr': result['full_name_fr'] or '',
+        'has_voted': has_voted
     })
 
 # ==================== Candidate Endpoints ====================

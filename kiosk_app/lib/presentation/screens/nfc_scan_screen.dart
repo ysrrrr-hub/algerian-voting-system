@@ -12,20 +12,22 @@ import 'error_already_voted_screen.dart';
 import 'error_invalid_card_screen.dart';
 
 class NfcScanScreen extends StatefulWidget {
-  const NfcScanScreen({super.key});
+  final String? initialUid;
+  const NfcScanScreen({super.key, this.initialUid});
   @override
   State<NfcScanScreen> createState() => _NfcScanScreenState();
 }
 
 class _NfcScanScreenState extends State<NfcScanScreen>
     with SingleTickerProviderStateMixin {
-  final _ctrl = TextEditingController(text: 'TEST_VOTER_001');
+  late final TextEditingController _ctrl;
   late AnimationController _pulseCtrl;
   late Animation<double>   _pulse;
 
   @override
   void initState() {
     super.initState();
+    _ctrl = TextEditingController(text: widget.initialUid ?? 'TEST_VOTER_001');
     _pulseCtrl = AnimationController(
       vsync:    this,
       duration: const Duration(seconds: 2),

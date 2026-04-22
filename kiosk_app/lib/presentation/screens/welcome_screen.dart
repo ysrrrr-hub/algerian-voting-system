@@ -1,12 +1,15 @@
 // lib/presentation/screens/welcome_screen.dart
-// شاشة الترحيب الرئيسية
+// شاشة الترحيب الرئيسية — مع وضع تجريبي مخفي (3 نقرات على الشعار)
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../providers/voting_provider.dart';
 import '../widgets/algerian_flag_bar.dart';
+import '../widgets/demo_mode_dialog.dart';
 import 'language_screen.dart';
+import 'nfc_scan_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -19,6 +22,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   late AnimationController _ctrl;
   late Animation<double>    _fade;
   late Animation<Offset>    _slide;
+
+  // ─── Demo Mode: عداد النقرات ─────────────────────────
+  int    _tapCount = 0;
+  Timer? _tapTimer;
 
   @override
   void initState() {
@@ -35,8 +42,45 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   @override
   void dispose() {
+    _tapTimer?.cancel();
     _ctrl.dispose();
     super.dispose();
+  }
+
+  /// Demo Mode: عند النقر 3 مرات على الشعار خلال ثانيتين
+  void _handleLogoTap() {
+    _tapCount++;
+    _tapTimer?.cancel();
+    _tapTimer = Timer(const Duration(seconds: 2), () => _tapCount = 0);
+
+    if (_tapCount >= 3) {
+      _tapCount = 0;
+      _tapTimer?.cancel();
+      _showDemoDialog();
+    }
+  }
+
+  void _showDemoDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => DemoModeDialog(
+        onUidSelected: (uid) {
+          Navigator.pop(context); // أغلق الـ dialog
+          _onDemoUidSelected(uid);
+        },
+      ),
+    );
+  }
+
+  /// Demo Mode: بعد اختيار UID — ادخل مباشرة لشاشة NFC مع UID جاهز
+  void _onDemoUidSelected(String uid) {
+    final p = context.read<VotingProvider>();
+    p.reset();
+    p.setLanguage(true); // الافتراضي: عربي
+    // انتقل مباشرة لشاشة NFC — UID سيكون جاهزاً في الحقل
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => NfcScanScreen(initialUid: uid),
+    ));
   }
 
   @override
@@ -82,24 +126,27 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // ─── شعار ────────────────────────────────
-              Container(
-                width: 110, height: 110,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.algerianGreen,
-                  boxShadow: [
-                    BoxShadow(
-                      color:      AppColors.algerianGreen.withOpacity(0.3),
-                      blurRadius: 24,
-                      spreadRadius: 4,
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.how_to_vote_rounded,
-                  size:  60,
-                  color: Colors.white,
+              // ─── شعار (3 نقرات = Demo Mode) ──────────
+              GestureDetector(
+                onTap: _handleLogoTap,
+                child: Container(
+                  width: 110, height: 110,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.algerianGreen,
+                    boxShadow: [
+                      BoxShadow(
+                        color:      AppColors.algerianGreen.withValues(alpha: 0.3),
+                        blurRadius: 24,
+                        spreadRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.how_to_vote_rounded,
+                    size:  60,
+                    color: Colors.white,
+                  ),
                 ),
               ),
 
@@ -204,22 +251,34 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               const SizedBox(height: 20),
 
               // ─── شريط الأمان ─────────────────────────
-              Row(
+              const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.lock_rounded,
+                  Icon(Icons.lock_rounded,
                       size: 14, color: AppColors.textSecondary),
-                  const SizedBox(width: 6),
+                  SizedBox(width: 6),
                   Text(
                     'نظام تصويت آمن مدعوم بالبلوكشين  •  '
                     'Système sécurisé par blockchain',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Tajawal',
                       fontSize:   11,
                       color:      AppColors.textSecondary,
                     ),
                   ),
                 ],
+              ),
+
+              const SizedBox(height: 8),
+
+              // ─── تلميح Demo Mode (خفي) ─────────────
+              Text(
+                'v1.0.0  •  اضغط الشعار 3 مرات للوضع التجريبي',
+                style: TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontSize:   9,
+                  color:      AppColors.textHint.withValues(alpha: 0.5),
+                ),
               ),
             ],
           ),
