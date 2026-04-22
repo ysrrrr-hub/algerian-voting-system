@@ -2,6 +2,7 @@
 // شاشة الترحيب الرئيسية — مع وضع تجريبي مخفي (3 نقرات على الشعار)
 
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
@@ -272,14 +273,32 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               const SizedBox(height: 8),
 
               // ─── تلميح Demo Mode (خفي) ─────────────
-              Text(
-                'v1.0.0  •  اضغط الشعار 3 مرات للوضع التجريبي',
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize:   9,
-                  color:      AppColors.textHint.withValues(alpha: 0.5),
+              if (kIsWeb)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: ElevatedButton.icon(
+                    onPressed: _showDemoDialog,
+                    icon: const Icon(Icons.build_rounded, size: 16),
+                    label: const Text('Demo Mode (Web)'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  'v1.0.0  •  اضغط الشعار 3 مرات للوضع التجريبي',
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize:   9,
+                    color:      AppColors.textHint.withValues(alpha: 0.5),
+                  ),
                 ),
-              ),
             ],
           ),
         ),

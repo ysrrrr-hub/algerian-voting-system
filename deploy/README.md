@@ -55,3 +55,31 @@ flutter build apk --release --split-per-abi
 API endpoint in `lib/core/utils/api_client.dart`:
 - Base URL: https://evotingdz.live
 - API prefix: /api
+
+## Kiosk Access Modes
+
+### 🌐 Web Access (Universal)
+
+Open in any browser:
+
+- [**https://evotingdz.live/kiosk**](https://evotingdz.live/kiosk)
+
+### 🖥️ Kiosk Mode (Full-screen, ATM-like)
+
+On Windows:
+
+```powershell
+.\deploy\launch-kiosk.ps1
+```
+
+Or manually:
+
+```bash
+chrome --kiosk --app=https://evotingdz.live/kiosk
+```
+
+Exit with Alt+F4.
+
+### 📱 Android APK (with NFC support)
+
+Install `deploy/apk/app-arm64-v8a-release.apk` on any Android device with NFC.
