@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../providers/voting_provider.dart';
 import '../widgets/algerian_flag_bar.dart';
+import 'error_already_voted_screen.dart';
 import 'success_screen.dart';
 import 'welcome_screen.dart';
 
@@ -36,7 +37,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       if (p.voterError == VoterError.alreadyVoted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const ErrorAlreadyVotedScreen()),
+          MaterialPageRoute(builder: (_) => ErrorAlreadyVotedScreen()),
         );
       } else {
         // خطأ: إعادة للبداية بعد 3 ثوانٍ

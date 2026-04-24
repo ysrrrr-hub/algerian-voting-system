@@ -194,7 +194,7 @@ def cast_vote():
     Body: {"nfc_uid": "...", "candidate_id": 3}
     """
     import psycopg
-    data = request.json
+    data = request.get_json(silent=True) or {}
     nfc_uid = data.get('nfc_uid') or data.get('voter_uid')
     candidate_id = data.get('candidate_id')
     
