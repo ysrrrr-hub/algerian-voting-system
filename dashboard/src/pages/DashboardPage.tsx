@@ -55,7 +55,7 @@ const DashboardPage: React.FC<Props> = ({ adminName }) => {
 
   useEffect(() => {
     fetchAll();
-    const interval = setInterval(fetchAll, 30_000);
+    const interval = setInterval(fetchAll, 3000);
     return () => clearInterval(interval);
   }, [fetchAll]);
 
@@ -130,6 +130,40 @@ const DashboardPage: React.FC<Props> = ({ adminName }) => {
           />
         </Grid>
       </Grid>
+
+      {/* ─── النتائج الحية للمرشحين ─────────────────────────── */}
+      {stats.candidates && stats.candidates.length > 0 && (
+        <Card sx={{ borderRadius: 3, mb: 3 }}>
+          <CardContent sx={{ p: 3 }}>
+            <Typography sx={{ fontFamily: 'Tajawal', fontWeight: 700, fontSize: 16, mb: 3 }}>
+              🏆 النتائج الحية / Résultats en direct
+            </Typography>
+            <Grid container spacing={2}>
+              {stats.candidates.map((c) => (
+                <Grid item xs={12} md={6} key={c.id}>
+                  <Box sx={{ mb: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography sx={{ fontFamily: 'Tajawal', fontWeight: 600 }}>{c.name_ar}</Typography>
+                      <Typography sx={{ fontFamily: 'Tajawal', fontWeight: 700, color: '#006233' }}>
+                        {c.votes} صوت ({c.percentage.toFixed(1)}%)
+                      </Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={c.percentage}
+                      sx={{
+                        height: 8, borderRadius: 4,
+                        bgcolor: '#E8F5EE',
+                        '& .MuiLinearProgress-bar': { bgcolor: '#006233', borderRadius: 4 },
+                      }}
+                    />
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ─── الرسم البياني + النزاهة ─────────────────────────── */}
       <Grid container spacing={2.5} sx={{ mb: 3 }}>

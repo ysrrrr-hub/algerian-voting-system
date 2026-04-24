@@ -193,8 +193,9 @@ def cast_vote():
     
     Body: {"nfc_uid": "...", "candidate_id": 3}
     """
+    import psycopg
     data = request.json
-    nfc_uid = data.get('nfc_uid')
+    nfc_uid = data.get('nfc_uid') or data.get('voter_uid')
     candidate_id = data.get('candidate_id')
     
     # التحقق من البيانات
@@ -202,57 +203,82 @@ def cast_vote():
         return jsonify({'error': 'Missing required fields'}), 400
     
     db = get_db()
-    cursor = db.cursor()
-    
-    # 1. التحقق: هل الناخب مؤهل؟
-    cursor.execute("SELECT * FROM check_voter_eligibility(%s)", (nfc_uid,))
-    voter = cursor.fetchone()
-    
-    if not voter or not voter['eligible']:
-        log_action(db, 'VOTE_ATTEMPT', nfc_uid, request.remote_addr, False, 
-                   voter['message'] if voter else 'Not found')
-        return jsonify({'error': voter['message'] if voter else 'Invalid voter'}), 403
-    
-    # 2. التحقق: هل المرشح موجود؟
-    cursor.execute("SELECT candidate_id FROM candidates WHERE candidate_id = %s AND is_active = TRUE", 
-                   (candidate_id,))
-    if not cursor.fetchone():
-        cursor.close()
-        log_action(db, 'VOTE_ATTEMPT', nfc_uid, request.remote_addr, False, 'Invalid candidate')
-        return jsonify({'error': 'مرشح غير صالح / Invalid candidate'}), 400
     
     try:
-        # 3. إضافة الصوت للبلوكشين
+        cursor = db.cursor()
+        
+        # 1. جلب الناخب مع LOCK (يمنع race condition)
+        # Select voter properties FOR UPDATE within transaction
+        cursor.execute("SELECT voter_id, has_voted, voted_at FROM voters WHERE nfc_uid = %s FOR UPDATE", (nfc_uid,))
+        voter = cursor.fetchone()
+        
+        if not voter:
+            log_action(db, 'VOTE_ATTEMPT', nfc_uid, request.remote_addr, False, 'Not found')
+            return jsonify({'error': 'Voter not found', 'code': 'VOTER_NOT_FOUND'}), 404
+            
+        # 2. فحص has_voted (الحماية الأولى)
+        if voter['has_voted']:
+            log_action(db, 'VOTE_ATTEMPT', nfc_uid, request.remote_addr, False, 'Already voted')
+            voted_at_iso = voter['voted_at'].isoformat() if voter.get('voted_at') else None
+            return jsonify({
+                'error': 'This voter has already voted',
+                'error_ar': 'هذا الناخب قد صوّت مسبقاً',
+                'error_fr': 'Cet électeur a déjà voté',
+                'code': 'ALREADY_VOTED',
+                'voted_at': voted_at_iso
+            }), 403
+            
+        # 3. التحقق: هل المرشح موجود؟
+        cursor.execute("SELECT candidate_id FROM candidates WHERE candidate_id = %s AND is_active = TRUE", 
+                       (candidate_id,))
+        if not cursor.fetchone():
+            log_action(db, 'VOTE_ATTEMPT', nfc_uid, request.remote_addr, False, 'Invalid candidate')
+            return jsonify({'error': 'مرشح غير صالح / Invalid candidate'}), 400
+        
+        # 4. إنشاء Vote record (الحماية الثالثة من خلال DB UNIQUE constraint)
+        cursor.execute("INSERT INTO votes (voter_id, candidate_id) VALUES (%s, %s) RETURNING id", (voter['voter_id'], candidate_id))
+        vote_id = cursor.fetchone()['id']
+        
+        # 5. إضافة الصوت للبلوكشين (بدون الـ commit الداخلي)
         vote_hash = get_blockchain().add_vote(
             {'candidate_id': candidate_id, 'nfc_uid': nfc_uid},
-            os.getenv('PUBLIC_KEY_PATH', '../secure/public_key.pem')
+            os.getenv('PUBLIC_KEY_PATH', '../secure/public_key.pem'),
+            commit=False
         )
         
-        # 4. تحديث حالة الناخب
+        # 6. تحديث حالة الناخب (الحماية الثانية)
         cursor.execute("""
             UPDATE voters 
             SET has_voted = TRUE, voted_at = NOW() 
             WHERE nfc_uid = %s
         """, (nfc_uid,))
         
+        # 7. commit كوحدة واحدة (atomicity)
         db.commit()
         
-        # 5. تسجيل في Audit Log
+        # 8. تسجيل في Audit Log
         log_action(db, 'VOTE_CAST', nfc_uid, request.remote_addr, True)
         
         cursor.close()
         
         return jsonify({
             'success': True,
-            'vote_hash': vote_hash,
+            'message': 'Vote recorded successfully',
+            'vote_id': vote_id,
+            'block_hash': vote_hash,
             'message_ar': 'تم التصويت بنجاح',
             'message_fr': 'Vote enregistré avec succès',
             'timestamp': datetime.now().isoformat()
-        })
-    
+        }), 200
+        
+    except psycopg.IntegrityError as e:
+        db.rollback()
+        return jsonify({
+            'error': 'Duplicate vote detected',
+            'code': 'DUPLICATE_VOTE'
+        }), 409
     except Exception as e:
         db.rollback()
-        cursor.close()
         log_action(db, 'VOTE_ATTEMPT', nfc_uid, request.remote_addr, False, str(e))
         
         return jsonify({
@@ -298,20 +324,41 @@ def get_statistics():
         total_voters = row['total'] if row and row['total'] else 0
         voted_count = row['voted'] if row and row['voted'] else 0
         remaining_count = total_voters - voted_count
-        turnout_percentage = (voted_count / total_voters * 100) if total_voters > 0 else 0
+        turnout_percentage = round((voted_count / total_voters * 100), 2) if total_voters > 0 else 0
+        
+        cursor.execute("""
+            SELECT c.candidate_id, c.full_name_ar, c.full_name_fr, COUNT(v.id) as vote_count
+            FROM candidates c
+            LEFT JOIN votes v ON c.candidate_id = v.candidate_id
+            GROUP BY c.candidate_id, c.full_name_ar, c.full_name_fr
+            ORDER BY c.candidate_id ASC
+        """)
+        candidates_rows = cursor.fetchall()
+        
+        candidates_stats = []
+        for c in candidates_rows:
+            c_votes = c['vote_count']
+            c_pct = round((c_votes / voted_count * 100), 2) if voted_count > 0 else 0
+            candidates_stats.append({
+                'id': c['candidate_id'],
+                'name_ar': c['full_name_ar'],
+                'name_fr': c['full_name_fr'],
+                'votes': c_votes,
+                'percentage': c_pct
+            })
         
         chain_len = len(get_blockchain())
-        
-        last_vote_time = None
-        if row and row['last_vote']:
-            last_vote_time = row['last_vote'].isoformat()
+        last_vote_time = row['last_vote'].isoformat() if row and row['last_vote'] else None
             
         return jsonify({
             'total_voters': total_voters,
             'voted_count': voted_count,
             'remaining_count': remaining_count,
+            'remaining': remaining_count,
             'turnout_percentage': turnout_percentage,
             'blockchain_length': chain_len,
+            'candidates': candidates_stats,
+            'last_updated': datetime.now().isoformat(),
             'last_vote_time': last_vote_time
         })
     except Exception as e:

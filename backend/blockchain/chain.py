@@ -31,7 +31,7 @@ class Blockchain:
         self.chain.append(genesis)
         self.save_block_to_db(genesis)
     
-    def add_vote(self, vote_data, public_key_path):
+    def add_vote(self, vote_data, public_key_path, commit=True):
         """إضافة صوت جديد"""
         # 1. تشفير الصوت
         encrypted_vote = Block.encrypt_vote(vote_data, public_key_path)
@@ -53,7 +53,7 @@ class Blockchain:
 
         # 4. إضافة للسلسلة وقاعدة البيانات
         self.chain.append(new_block)
-        self.save_block_to_db(new_block)
+        self.save_block_to_db(new_block, commit=commit)
         
         return new_block.hash  # إرجاع الـ hash لتوليد QR Code
     
@@ -73,7 +73,7 @@ class Blockchain:
         
         return True, "Blockchain is valid"
     
-    def save_block_to_db(self, block):
+    def save_block_to_db(self, block, commit=True):
         """حفظ الكتلة في قاعدة البيانات"""
         cursor = self.db.cursor()
         # Save timestamp as naive UTC for consistent hash calculation
@@ -82,7 +82,8 @@ class Blockchain:
             INSERT INTO blockchain (block_index, timestamp, encrypted_vote, previous_hash, current_hash, nonce)
             VALUES (%s, %s, %s, %s, %s, %s)
         """, (block.index, ts_naive_utc, block.encrypted_vote, block.previous_hash, block.hash, block.nonce))
-        self.db.commit()
+        if commit:
+            self.db.commit()
     
     def load_chain_from_db(self):
         """تحميل السلسلة من قاعدة البيانات عند بدء التشغيل"""

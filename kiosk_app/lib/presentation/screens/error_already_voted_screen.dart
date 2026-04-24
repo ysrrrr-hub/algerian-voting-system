@@ -7,8 +7,28 @@ import '../providers/voting_provider.dart';
 import '../widgets/algerian_flag_bar.dart';
 import 'welcome_screen.dart';
 
-class ErrorAlreadyVotedScreen extends StatelessWidget {
+class ErrorAlreadyVotedScreen extends StatefulWidget {
   const ErrorAlreadyVotedScreen({super.key});
+
+  @override
+  State<ErrorAlreadyVotedScreen> createState() => _ErrorAlreadyVotedScreenState();
+}
+
+class _ErrorAlreadyVotedScreenState extends State<ErrorAlreadyVotedScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 10), () {
+      if (mounted) {
+        context.read<VotingProvider>().resetLanguage();
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+          (_) => false,
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -26,20 +26,28 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     final p = context.read<VotingProvider>();
     await p.submitVote();
     if (!mounted) return;
+    
     if (p.voteState == VotingState.success) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const SuccessScreen()),
       );
     } else {
-      // خطأ: إعادة للبداية بعد 3 ثوانٍ
-      await Future.delayed(const Duration(seconds: 3));
-      if (mounted) {
-        Navigator.pushAndRemoveUntil(
+      if (p.voterError == VoterError.alreadyVoted) {
+        Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-          (_) => false,
+          MaterialPageRoute(builder: (_) => const ErrorAlreadyVotedScreen()),
         );
+      } else {
+        // خطأ: إعادة للبداية بعد 3 ثوانٍ
+        await Future.delayed(const Duration(seconds: 3));
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+            (_) => false,
+          );
+        }
       }
     }
   }

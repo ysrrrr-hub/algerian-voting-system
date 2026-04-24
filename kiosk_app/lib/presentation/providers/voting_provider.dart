@@ -148,6 +148,13 @@ class VotingProvider extends ChangeNotifier {
     try {
       _voteResult = await _api.castVote(_nfcUid, _selectedId!);
       _voteState  = VotingState.success;
+    } on ApiException catch (e) {
+      if (e.statusCode == 403) {
+        // Here we could directly route to the already voted screen if needed
+        // but setting _voterError to alreadyVoted achieves it natively via wrapper
+        _voterError = VoterError.alreadyVoted;
+      }
+      _voteState = VotingState.error;
     } catch (_) {
       _voteState = VotingState.error;
     }

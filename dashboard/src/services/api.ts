@@ -11,6 +11,14 @@ const http = axios.create({
 });
 
 // ─── Types ──────────────────────────────────────────────────────
+export interface CandidateStat {
+  id: number;
+  name_ar: string;
+  name_fr: string;
+  votes: number;
+  percentage: number;
+}
+
 export interface VotingStats {
   total_voters:       number;
   voted_count:        number;
@@ -18,6 +26,7 @@ export interface VotingStats {
   turnout_percentage: number;
   blockchain_length:  number;
   last_vote_time:     string | null;
+  candidates?:        CandidateStat[];
 }
 
 export interface ChainStatus {

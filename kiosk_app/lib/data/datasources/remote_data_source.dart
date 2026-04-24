@@ -45,8 +45,23 @@ class RemoteDataSource {
     if (result.isSuccess && result.data != null) {
       return VoteResultModel.fromJson(result.data!);
     }
-    throw Exception(result.errorAr ?? 'Failed to cast vote');
+    throw ApiException(
+      result.statusCode, 
+      result.errorAr ?? 'Failed to cast vote',
+      result.errorFr ?? 'Échec du vote'
+    );
   }
+}
+
+class ApiException implements Exception {
+  final int statusCode;
+  final String messageAr;
+  final String messageFr;
+
+  ApiException(this.statusCode, this.messageAr, this.messageFr);
+
+  @override
+  String toString() => messageAr;
 
   // ─── فحص صحة النظام ─────────────────────────────────────────
   Future<bool> healthCheck() async {
