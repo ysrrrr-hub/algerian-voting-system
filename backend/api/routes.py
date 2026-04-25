@@ -59,7 +59,8 @@ def get_blockchain():
             dbname=os.getenv('DB_NAME', 'voting_system'),
             user=os.getenv('DB_USER', 'postgres'),
             password=os.getenv('DB_PASSWORD'),
-            autocommit=False
+            autocommit=False,
+            row_factory=dict_row
         )
         _blockchain_instance = Blockchain(bc_db)
     return _blockchain_instance
