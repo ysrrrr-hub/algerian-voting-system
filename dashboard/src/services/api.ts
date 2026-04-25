@@ -17,6 +17,7 @@ export interface CandidateStat {
   name_fr: string;
   votes: number;
   percentage: number;
+  color?: string;
 }
 
 export interface VotingStats {
@@ -27,6 +28,14 @@ export interface VotingStats {
   blockchain_length:  number;
   last_vote_time:     string | null;
   candidates?:        CandidateStat[];
+  election?: {
+    name_ar: string;
+    name_fr: string;
+    end_date: string | null;
+  };
+  results_status?:    string;
+  message_ar?:        string;
+  message_fr?:        string;
 }
 
 export interface ChainStatus {
@@ -105,13 +114,16 @@ export default http;
 // ─── New endpoints ───────────────────────────────────────────
 
 export interface AuditEntry {
-  log_id:        number;
-  action_type:   string;
-  nfc_uid:       string | null;
-  ip_address:    string | null;
-  success:       boolean;
-  error_message: string | null;
-  timestamp:     string;
+  log_id:          number;
+  action_type:     string;
+  nfc_uid:         string | null;
+  ip_address:      string | null;
+  user_agent:      string | null;
+  success:         boolean;
+  status:          string;
+  identifier_hash: string | null;
+  error_message:   string | null;
+  timestamp:       string;
 }
 
 export interface AuditLogResponse {
@@ -139,12 +151,18 @@ export interface AllBlocksResponse {
 export const apiAuditLog = (
   token:       string,
   actionType?: string,
-  limit  = 200,
-  offset = 0,
-) => http.get<AuditLogResponse>('/api/audit-log', {
+  status?:     string,
+  limit  = 50,
+  page = 1,
+) => http.get<AuditLogResponse>('/api/audit/logs', {
   headers: { Authorization: `Bearer ${token}` },
-  params:  { action_type: actionType, limit, offset },
+  params:  { action_type: actionType, status, per_page: limit, page },
 });
+
+export const apiAuditStats = (token: string) => 
+  http.get<any>('/api/audit/stats', {
+    headers: { Authorization: `Bearer ${token}` }
+  });
 
 /** جميع كتل البلوكشين */
 export const apiAllBlocks = (

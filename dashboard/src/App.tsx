@@ -10,7 +10,7 @@ import {
 } from '@mui/material';
 import {
   Dashboard, LockOpen, Logout, Security,
-  ManageSearch, AccountTree, BarChart,
+  ManageSearch, AccountTree, BarChart, CheckCircle
 } from '@mui/icons-material';
 
 import LoginPage from './pages/LoginPage';
@@ -18,6 +18,7 @@ import DashboardPage from './pages/DashboardPage';
 import ResultsPage from './pages/ResultsPage';
 import AuditLogPage from './pages/AuditLogPage';
 import BlockchainExplorerPage from './pages/BlockchainExplorerPage';
+import VerifyReceipt from './pages/VerifyReceipt';
 import { apiLogout } from './services/api';
 
 // ─── Algerian Theme ───────────────────────────────────────────
@@ -132,6 +133,20 @@ const NavBar: React.FC<{
           السجل
         </Button>
 
+        <Button
+          component={Link} to="/verify"
+          startIcon={<CheckCircle />}
+          variant={loc.pathname.startsWith('/verify') ? 'contained' : 'text'}
+          size="small"
+          sx={{
+            fontFamily: 'Tajawal', fontSize: 13,
+            bgcolor: loc.pathname.startsWith('/verify') ? '#2E7D32' : 'transparent',
+            color:   loc.pathname.startsWith('/verify') ? '#fff' : '#5A7062',
+          }}
+        >
+          بوابة التحقق / Portail de vérification
+        </Button>
+
         {/* معلومات المشرف */}
         <Chip
           label={`${adminName} — ${role}`}
@@ -177,35 +192,37 @@ const App: React.FC = () => {
     setAdminInfo(null);
   };
 
-  if (!token || !adminInfo) {
-    return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <LoginPage onLogin={handleLogin} />
-      </ThemeProvider>
-    );
-  }
-
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <BrowserRouter>
-        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-          <NavBar
-            adminName={adminInfo.full_name}
-            role={adminInfo.role}
-            onLogout={handleLogout}
-          />
-          <Box sx={{ flex: 1 }}>
-            <Routes>
-              <Route path="/"         element={<DashboardPage adminName={adminInfo.full_name} />} />
-              <Route path="/results"  element={<ResultsPage token={token} />} />
-              <Route path="/explorer" element={<BlockchainExplorerPage />} />
-              <Route path="/audit"    element={<AuditLogPage token={token} />} />
-              <Route path="*"         element={<Navigate to="/" replace />} />
-            </Routes>
-          </Box>
-        </Box>
+        <Routes>
+          <Route path="/verify" element={<VerifyReceipt />} />
+          <Route path="/verify/:code" element={<VerifyReceipt />} />
+          
+          <Route path="*" element={
+            !token || !adminInfo ? (
+              <LoginPage onLogin={handleLogin} />
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+                <NavBar
+                  adminName={adminInfo.full_name}
+                  role={adminInfo.role}
+                  onLogout={handleLogout}
+                />
+                <Box sx={{ flex: 1 }}>
+                  <Routes>
+                    <Route path="/"         element={<DashboardPage adminName={adminInfo.full_name} />} />
+                    <Route path="/results"  element={<ResultsPage token={token} />} />
+                    <Route path="/explorer" element={<BlockchainExplorerPage />} />
+                    <Route path="/audit"    element={<AuditLogPage token={token} />} />
+                    <Route path="*"         element={<Navigate to="/" replace />} />
+                  </Routes>
+                </Box>
+              </Box>
+            )
+          } />
+        </Routes>
       </BrowserRouter>
     </ThemeProvider>
   );

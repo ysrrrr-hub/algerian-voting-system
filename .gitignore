@@ -57,3 +57,9 @@ Thumbs.db
 logs/
 npm-debug.log*
 yarn-debug.log*
+
+# Large binaries
+deploy/apk/*.apk
+dashboard/build.zip
+kiosk_app/web_build.zip
+

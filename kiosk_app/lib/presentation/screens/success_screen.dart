@@ -151,7 +151,7 @@ class _SuccessScreenState extends State<SuccessScreen>
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        s.voteHashLabel,
+                                        "رمز الوصل / Code de Reçu:",
                                         style: const TextStyle(
                                           fontFamily:  'Tajawal',
                                           fontSize:    11,
@@ -160,13 +160,13 @@ class _SuccessScreenState extends State<SuccessScreen>
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        result.shortHash,
+                                        result.receipt?.receiptCode ?? '—',
                                         style: const TextStyle(
-                                          fontFamily:   'Tajawal',
-                                          fontSize:     14,
+                                          fontFamily:   'monospace',
+                                          fontSize:     16,
                                           fontWeight:   FontWeight.w700,
                                           color:        AppColors.algerianGreen,
-                                          letterSpacing: 1.5,
+                                          letterSpacing: 2.0,
                                         ),
                                       ),
                                     ],
@@ -218,7 +218,7 @@ class _SuccessScreenState extends State<SuccessScreen>
                                 ),
                                 child: Column(children: [
                                   QrImageView(
-                                    data:            result.voteHash,
+                                    data:            result.receipt?.qrData ?? '',
                                     version:         QrVersions.auto,
                                     size:            160,
                                     foregroundColor: AppColors.algerianGreen,
@@ -237,7 +237,7 @@ class _SuccessScreenState extends State<SuccessScreen>
                                   SizedBox(
                                     width: 160,
                                     child: Text(
-                                      s.receiptHint,
+                                      result.receipt?.privacyNoteAr ?? s.receiptHint,
                                       textAlign: TextAlign.center,
                                       style: const TextStyle(
                                         fontFamily: 'Tajawal',
@@ -247,6 +247,17 @@ class _SuccessScreenState extends State<SuccessScreen>
                                       ),
                                     ),
                                   ),
+                                  if (result.receipt?.timestamp != null) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      result.receipt!.timestamp,
+                                      style: const TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize:   9,
+                                        color:      AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
                                 ]),
                               ),
                             ],

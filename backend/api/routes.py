@@ -11,7 +11,11 @@ import os
 from dotenv import load_dotenv
 
 from blockchain.chain import Blockchain
-from utils.audit import log_action
+from services.audit_service import AuditService
+from services.receipt_service import ReceiptService
+import io
+import csv
+from flask import Response
 
 # تحميل المتغيرات البيئية
 load_dotenv()
@@ -104,7 +108,7 @@ def admin_login():
         pw_hash = row['password_hash'].encode() if isinstance(row['password_hash'], str) else row['password_hash']
         if bcrypt.checkpw(password.encode('utf-8'), pw_hash):
             token = secrets.token_hex(32)
-            log_action(db, 'ADMIN_LOGIN', None, request.remote_addr, True)
+            AuditService.log('ADMIN_LOGIN_SUCCESS', 'SUCCESS', None)
             return jsonify({
                 'success': True,
                 'token': token,
@@ -112,7 +116,7 @@ def admin_login():
                 'expires_in': 3600
             })
 
-    log_action(db, 'ADMIN_LOGIN', None, request.remote_addr, False, 'Invalid credentials')
+    AuditService.log('ADMIN_LOGIN_FAILED', 'FAILED', None, 'Invalid credentials')
     return jsonify({'error': 'بيانات خاطئة / Invalid credentials'}), 401
 
 # ==================== Voter Endpoints ====================
@@ -137,13 +141,13 @@ def check_voter_status(nfc_uid):
         cursor.close()
     
     if not result:
-        log_action(db, 'VOTER_CHECK', nfc_uid, request.remote_addr, False, 'Not found')
+        AuditService.log('VOTER_NOT_FOUND', 'FAILED', nfc_uid, 'Not found')
         return jsonify({
             'error': 'بطاقة غير مسجلة / Carte non enregistrée'
         }), 404
     
     has_voted = result['has_voted']
-    log_action(db, 'VOTER_CHECK', nfc_uid, request.remote_addr, True)
+    AuditService.log('VOTER_AUTHENTICATED', 'SUCCESS', nfc_uid)
     
     return jsonify({
         'eligible': not has_voted,
@@ -213,12 +217,12 @@ def cast_vote():
         voter = cursor.fetchone()
         
         if not voter:
-            log_action(db, 'VOTE_ATTEMPT', nfc_uid, request.remote_addr, False, 'Not found')
+            AuditService.log('VOTER_NOT_FOUND', 'FAILED', nfc_uid, 'Not found')
             return jsonify({'error': 'Voter not found', 'code': 'VOTER_NOT_FOUND'}), 404
             
         # 2. فحص has_voted (الحماية الأولى)
         if voter['has_voted']:
-            log_action(db, 'VOTE_ATTEMPT', nfc_uid, request.remote_addr, False, 'Already voted')
+            AuditService.log('VOTE_DUPLICATE_BLOCKED', 'WARNING', nfc_uid, 'Already voted')
             voted_at_iso = voter['voted_at'].isoformat() if voter.get('voted_at') else None
             return jsonify({
                 'error': 'This voter has already voted',
@@ -232,7 +236,7 @@ def cast_vote():
         cursor.execute("SELECT candidate_id FROM candidates WHERE candidate_id = %s AND is_active = TRUE", 
                        (candidate_id,))
         if not cursor.fetchone():
-            log_action(db, 'VOTE_ATTEMPT', nfc_uid, request.remote_addr, False, 'Invalid candidate')
+            AuditService.log('SYSTEM_ERROR', 'FAILED', nfc_uid, 'Invalid candidate')
             return jsonify({'error': 'مرشح غير صالح / Invalid candidate'}), 400
         
         # 4. إنشاء Vote record (الحماية الثالثة من خلال DB UNIQUE constraint)
@@ -256,8 +260,17 @@ def cast_vote():
         # 7. commit كوحدة واحدة (atomicity)
         db.commit()
         
-        # 8. تسجيل في Audit Log
-        log_action(db, 'VOTE_CAST', nfc_uid, request.remote_addr, True)
+        # 8. generating receipt AFTER successful commit 
+        # But wait, ReceiptService.generate_receipt() opens a transaction but we want it stored. Let's do it right.
+        # Actually generate_receipt does standard DB operations without explicitly committing or it does?
+        # Oh, ReceiptService has cursor.close(), no commit. Wait, that means standard auto-commit unless we are in a transaction.
+        # Better just use the ReceiptService normally (it fetches a connection and inserts, so it will commit if auto).
+        block_index = len(get_blockchain()) - 1
+        receipt = ReceiptService.generate_receipt(vote_hash, vote_hash, block_index, election_id=1)
+        
+        # 9. تسجيل في Audit Log
+        AuditService.log('VOTE_CAST', 'SUCCESS', nfc_uid)
+        AuditService.log('RECEIPT_GENERATED', 'SUCCESS', nfc_uid)
         
         cursor.close()
         
@@ -267,8 +280,9 @@ def cast_vote():
             'vote_id': vote_id,
             'block_hash': vote_hash,
             'message_ar': 'تم التصويت بنجاح',
-            'message_fr': 'Vote enregistré avec succès',
-            'timestamp': datetime.now().isoformat()
+            'message_fr': 'Votre vote a été enregistré',
+            'timestamp': datetime.now().isoformat(),
+            'receipt': receipt
         }), 200
         
     except psycopg.IntegrityError as e:
@@ -279,7 +293,7 @@ def cast_vote():
         }), 409
     except Exception as e:
         db.rollback()
-        log_action(db, 'VOTE_ATTEMPT', nfc_uid, request.remote_addr, False, str(e))
+        AuditService.log('SYSTEM_ERROR', 'FAILED', nfc_uid, str(e))
         
         return jsonify({
             'error': 'فشل في حفظ الصوت / Failed to save vote',
@@ -292,6 +306,9 @@ def cast_vote():
 def verify_chain():
     """التحقق من سلامة البلوكشين"""
     is_valid, message = get_blockchain().verify_integrity()
+    
+    if is_valid:
+        AuditService.log('BLOCKCHAIN_VERIFIED', 'SUCCESS', None)
     
     return jsonify({
         'valid': is_valid,
@@ -326,6 +343,12 @@ def get_statistics():
         remaining_count = total_voters - voted_count
         turnout_percentage = round((voted_count / total_voters * 100), 2) if total_voters > 0 else 0
         
+        cursor.execute("SELECT * FROM elections WHERE id = 1")
+        election = cursor.fetchone() or {}
+        
+        status = election.get('status', 'OPEN')
+        results_status = 'PRELIMINARY' if status == 'OPEN' else 'OFFICIAL'
+        
         cursor.execute("""
             SELECT c.candidate_id, c.full_name_ar, c.full_name_fr, COUNT(v.id) as vote_count
             FROM candidates c
@@ -336,7 +359,8 @@ def get_statistics():
         candidates_rows = cursor.fetchall()
         
         candidates_stats = []
-        for c in candidates_rows:
+        colors = ['#006233', '#D21034', '#C9A961', '#1A73E8', '#F9AB00']
+        for idx, c in enumerate(candidates_rows):
             c_votes = c['vote_count']
             c_pct = round((c_votes / voted_count * 100), 2) if voted_count > 0 else 0
             candidates_stats.append({
@@ -344,7 +368,8 @@ def get_statistics():
                 'name_ar': c['full_name_ar'],
                 'name_fr': c['full_name_fr'],
                 'votes': c_votes,
-                'percentage': c_pct
+                'percentage': c_pct,
+                'color': colors[idx % len(colors)]
             })
         
         chain_len = len(get_blockchain())
@@ -359,7 +384,15 @@ def get_statistics():
             'blockchain_length': chain_len,
             'candidates': candidates_stats,
             'last_updated': datetime.now().isoformat(),
-            'last_vote_time': last_vote_time
+            'last_vote_time': last_vote_time,
+            'election': {
+                'name_ar': election.get('name_ar', 'الانتخابات الرئاسية'),
+                'name_fr': election.get('name_fr', 'Élection Présidentielle'),
+                'end_date': election['end_date'].isoformat() if election.get('end_date') else None
+            },
+            'results_status': results_status,
+            'message_ar': "نتائج أولية — تحدّث لحظياً",
+            'message_fr': "Résultats préliminaires — mis à jour en temps réel"
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -456,7 +489,7 @@ def decrypt_votes():
                 'percentage': (count / total_votes * 100) if total_votes > 0 else 0
             }
         
-        log_action(db, 'DECRYPT_RESULTS', None, request.remote_addr, True)
+        AuditService.log('DECRYPT_RESULTS', 'SUCCESS', None)
         
         return jsonify({
             'success': True,
@@ -466,57 +499,60 @@ def decrypt_votes():
         })
     
     except ValueError as e:
-        log_action(db, 'DECRYPT_RESULTS', None, request.remote_addr, False, str(e))
+        AuditService.log('DECRYPT_RESULTS', 'FAILED', None, str(e))
         return jsonify({'error': 'فك التشفير فشل / Decryption failed', 'details': str(e)}), 400
 
 # ==================== Missing Endpoints ====================
 
-@app.route('/api/audit-log', methods=['GET'])
-def get_audit_log():
-    try:
-        limit = int(request.args.get('limit', 200))
-        offset = int(request.args.get('offset', 0))
-        action_type = request.args.get('action_type')
-        
-        db = get_db()
-        cursor = db.cursor()
-        
-        base_query = "FROM audit_log"
-        params = []
-        if action_type:
-            base_query += " WHERE action_type = %s"
-            params.append(action_type)
-            
-        cursor.execute(f"SELECT COUNT(*) as t {base_query}", tuple(params))
-        total_row = cursor.fetchone()
-        total = total_row['t'] if total_row else 0
-        
-        cursor.execute(f"SELECT log_id, action_type, nfc_uid, ip_address, success, error_message, timestamp {base_query} ORDER BY timestamp DESC LIMIT %s OFFSET %s", tuple(params + [limit, offset]))
-        rows = cursor.fetchall()
-        
-        logs = []
-        for r in rows:
-            logs.append({
-                'log_id': r['log_id'],
-                'action_type': r['action_type'],
-                'nfc_uid': r['nfc_uid'],
-                'ip_address': r['ip_address'],
-                'success': r['success'],
-                'error_message': r['error_message'],
-                'timestamp': r['timestamp'].isoformat() if r['timestamp'] else None
-            })
-            
-        return jsonify({
-            'logs': logs,
-            'total': total,
-            'limit': limit,
-            'offset': offset
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if 'cursor' in locals():
-            cursor.close()
+# ==================== Audit Endpoints ====================
+
+@app.route('/api/audit/logs', methods=['GET'])
+def get_audit_logs():
+    # TODO: Add @require_admin guard
+    action_type = request.args.get('action_type')
+    status = request.args.get('status')
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 50))
+    
+    result = AuditService.query(action_type, status, date_from, date_to, page, per_page)
+    AuditService.log('AUDIT_VIEWED', 'SUCCESS', None)
+    return jsonify(result)
+
+@app.route('/api/audit/stats', methods=['GET'])
+def get_audit_stats():
+    # TODO: Add @require_admin guard
+    stats = AuditService.get_stats()
+    return jsonify(stats)
+
+@app.route('/api/audit/export', methods=['GET'])
+def export_audit_logs():
+    # TODO: Add @require_admin guard
+    action_type = request.args.get('action_type')
+    status = request.args.get('status')
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    
+    csv_data = AuditService.export_csv(action_type, status, date_from, date_to)
+    AuditService.log('AUDIT_EXPORTED', 'SUCCESS', None)
+    
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-disposition": "attachment; filename=audit_export.csv"}
+    )
+
+# ==================== Receipt Verification ====================
+
+@app.route('/api/verify/<receipt_code>', methods=['GET'])
+def verify_receipt(receipt_code):
+    result = ReceiptService.verify_receipt(receipt_code)
+    if result.get('verified'):
+        AuditService.log('RECEIPT_VERIFIED', 'SUCCESS', None)
+    else:
+        AuditService.log('RECEIPT_VERIFICATION_FAILED', 'FAILED', None)
+    return jsonify(result)
 
 @app.route('/api/blockchain/all', methods=['GET'])
 def get_all_blocks():

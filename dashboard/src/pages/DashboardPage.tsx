@@ -5,8 +5,17 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   Box, Card, CardContent, CircularProgress,
   Grid, IconButton, LinearProgress,
-  Tooltip, Typography,
+  Tooltip, Typography, Chip, styled
 } from '@mui/material';
+
+const PulseChip = styled(Chip)(({ theme }) => ({
+  animation: 'pulse 2s infinite',
+  '@keyframes pulse': {
+    '0%': { boxShadow: '0 0 0 0 rgba(210, 16, 52, 0.7)' },
+    '70%': { boxShadow: '0 0 0 10px rgba(210, 16, 52, 0)' },
+    '100%': { boxShadow: '0 0 0 0 rgba(210, 16, 52, 0)' }
+  }
+}));
 import {
   HowToVote, Link as LinkIcon, People,
   Refresh, TrendingUp,
@@ -67,11 +76,20 @@ const DashboardPage: React.FC<Props> = ({ adminName }) => {
       {/* ─── رأس الصفحة ────────────────────────────────────── */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>
-          <Typography sx={{ fontFamily: 'Tajawal', fontWeight: 800, fontSize: 22, color: '#1A2E1F' }}>
-            📊 لوحة المراقبة الحية
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+            <Typography sx={{ fontFamily: 'Tajawal', fontWeight: 800, fontSize: 24, color: '#1A2E1F' }}>
+              📊 لوحة المراقبة الحية
+            </Typography>
+            <PulseChip label="🔴 LIVE" color="error" size="small" />
+            <Chip 
+              label={`${stats.results_status === 'OFFICIAL' ? 'نتائج رسمية' : 'نتائج أولية'} / ${stats.results_status === 'OFFICIAL' ? 'Résultats officiels' : 'Résultats préliminaires'}`} 
+              variant="outlined" 
+              size="small" 
+              sx={{ fontFamily: 'Tajawal', fontWeight: 'bold' }} 
+            />
+          </Box>
           <Typography sx={{ fontFamily: 'Tajawal', fontSize: 13, color: '#5A7062' }}>
-            Tableau de bord en direct — مرحباً {adminName} •{' '}
+            {stats.election ? `${stats.election.name_ar} — ` : ''}مرحباً {adminName} •{' '}
             آخر تحديث: {lastRefresh.toLocaleTimeString('ar-DZ')}
           </Typography>
         </Box>
@@ -144,7 +162,7 @@ const DashboardPage: React.FC<Props> = ({ adminName }) => {
                   <Box sx={{ mb: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                       <Typography sx={{ fontFamily: 'Tajawal', fontWeight: 600 }}>{c.name_ar}</Typography>
-                      <Typography sx={{ fontFamily: 'Tajawal', fontWeight: 700, color: '#006233' }}>
+                      <Typography sx={{ fontFamily: 'Tajawal', fontWeight: 700, color: c.color || '#006233' }}>
                         {c.votes} صوت ({c.percentage.toFixed(1)}%)
                       </Typography>
                     </Box>
@@ -154,7 +172,7 @@ const DashboardPage: React.FC<Props> = ({ adminName }) => {
                       sx={{
                         height: 8, borderRadius: 4,
                         bgcolor: '#E8F5EE',
-                        '& .MuiLinearProgress-bar': { bgcolor: '#006233', borderRadius: 4 },
+                        '& .MuiLinearProgress-bar': { bgcolor: c.color || '#006233', borderRadius: 4 },
                       }}
                     />
                   </Box>
