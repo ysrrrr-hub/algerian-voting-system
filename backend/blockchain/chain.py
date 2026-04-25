@@ -113,3 +113,33 @@ class Blockchain:
         except Exception as e:
             print(f"Error loading chain: {e}")
             self.db.rollback()
+
+    def decrypt_all_votes(self, private_key_path, password):
+        """فك تشفير جميع الأصوات في السلسلة (بعد إغلاق الانتخابات الرسمي)"""
+        decrypted_votes = []
+        
+        for block in self.chain:
+            # Skip genesis block
+            if block.index == 0 or block.encrypted_vote == "GENESIS_BLOCK":
+                continue
+            
+            try:
+                # This will raise an exception if password is wrong
+                vote_data = Block.decrypt_vote(
+                    block.encrypted_vote,
+                    private_key_path,
+                    password
+                )
+                
+                # Format to match expectations in routes.py
+                decrypted_votes.append({
+                    'block_index': block.index,
+                    'block_hash': block.hash,
+                    'timestamp': block.timestamp.isoformat() if hasattr(block.timestamp, 'isoformat') else str(block.timestamp),
+                    'candidate_id': vote_data.get('candidate_id'),
+                })
+            except Exception as e:
+                # Re-raise to be handled by routes.py (e.g. ValueError for wrong password)
+                raise e
+        
+        return decrypted_votes

@@ -457,8 +457,9 @@ def decrypt_votes():
     
     try:
         # فك التشفير
-        votes = get_blockchain().decrypt_all_votes(
-            os.getenv('PRIVATE_KEY_PATH', '../secure/private_key_encrypted.bin'),
+        blockchain = get_blockchain()
+        votes = blockchain.decrypt_all_votes(
+            os.getenv('PRIVATE_KEY_PATH', '../secure/private_key_encrypted.pem'),
             password
         )
         
@@ -489,18 +490,27 @@ def decrypt_votes():
                 'percentage': (count / total_votes * 100) if total_votes > 0 else 0
             }
         
-        AuditService.log('DECRYPT_RESULTS', 'SUCCESS', None)
+        AuditService.log('ELECTION_DECRYPTED', 'SUCCESS', None, f"Total votes: {total_votes}")
         
         return jsonify({
             'success': True,
             'total_votes': total_votes,
             'results': results,
-            'votes': votes  # التفاصيل الكاملة
+            'votes': votes
         })
     
-    except ValueError as e:
-        AuditService.log('DECRYPT_RESULTS', 'FAILED', None, str(e))
-        return jsonify({'error': 'فك التشفير فشل / Decryption failed', 'details': str(e)}), 400
+    except Exception as e:
+        error_msg = str(e)
+        # Check for wrong password specific errors from cryptography
+        if "padding" in error_msg.lower() or "decryption failed" in error_msg.lower():
+            error_msg = "كلمة السر خاطئة / Wrong password"
+            
+        AuditService.log('DECRYPTION_FAILED', 'FAILED', None, error_msg)
+        return jsonify({
+            'success': False,
+            'error': 'فك التشفير فشل / Decryption failed',
+            'details': error_msg
+        }), 400
 
 # ==================== Missing Endpoints ====================
 

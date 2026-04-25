@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.serialization import load_pem_public_key
+from cryptography.hazmat.primitives.serialization import load_pem_public_key, load_pem_private_key
 
 class Block:
     def __init__(self, index, timestamp, encrypted_vote, previous_hash, nonce=0):
@@ -59,3 +59,30 @@ class Block:
         except Exception as e:
             print(f"Error encrypting vote: {e}")
             raise
+
+    @staticmethod
+    def decrypt_vote(encrypted_hex, private_key_path, password):
+        """فك تشفير صوت واحد بالمفتاح الخاص (RSA-OAEP + SHA-256)"""
+        try:
+            with open(private_key_path, 'rb') as key_file:
+                private_key = load_pem_private_key(
+                    key_file.read(),
+                    password=password.encode() if isinstance(password, str) else password
+                )
+            
+            encrypted_bytes = bytes.fromhex(encrypted_hex)
+            
+            decrypted = private_key.decrypt(
+                encrypted_bytes,
+                padding.OAEP(
+                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None
+                )
+            )
+            
+            return json.loads(decrypted.decode())
+        except Exception as e:
+            # We don't print the error here to avoid leaking info in logs if not needed, 
+            # but we raise it to be handled by the caller
+            raise e
