@@ -458,6 +458,10 @@ def decrypt_votes():
     try:
         # فك التشفير
         blockchain = get_blockchain()
+        
+        # التحقق من سلامة البلوكشين
+        integrity_valid, integrity_msg = blockchain.verify_integrity()
+        
         votes = blockchain.decrypt_all_votes(
             os.getenv('PRIVATE_KEY_PATH', '../secure/private_key_encrypted.pem'),
             password
@@ -469,46 +473,56 @@ def decrypt_votes():
             cid = vote['candidate_id']
             vote_counts[cid] = vote_counts.get(cid, 0) + 1
         
-        # جلب أسماء المرشحين
+        # جلب جميع المرشحين
         db = get_db()
         cursor = db.cursor()
-        cursor.execute("SELECT candidate_id, full_name_ar, full_name_fr FROM candidates")
-        candidates = {row['candidate_id']: row for row in cursor.fetchall()}
+        cursor.execute("SELECT candidate_id, full_name_ar, full_name_fr FROM candidates ORDER BY candidate_id")
+        candidates_rows = cursor.fetchall()
         cursor.close()
         
-        # دمج النتائج
-        results = {}
+        # دمج النتائج بتنسيق قائمة (List) كما يتوقعه الـ Frontend
+        results_list = []
         total_votes = len(votes)
+        colors = ['#006233', '#D21034', '#C9A961', '#1A73E8', '#F9AB00']
         
-        for cid, count in vote_counts.items():
-            candidate = candidates.get(cid, {})
-            results[cid] = {
+        for idx, row in enumerate(candidates_rows):
+            cid = row['candidate_id']
+            count = vote_counts.get(cid, 0)
+            results_list.append({
                 'candidate_id': cid,
-                'name_ar': candidate.get('full_name_ar', 'Unknown'),
-                'name_fr': candidate.get('full_name_fr', 'Unknown'),
+                'name_ar': row['full_name_ar'],
+                'name_fr': row['full_name_fr'],
                 'votes': count,
-                'percentage': (count / total_votes * 100) if total_votes > 0 else 0
-            }
+                'percentage': (count / total_votes * 100) if total_votes > 0 else 0,
+                'color': colors[idx % len(colors)]
+            })
+            
+        # ترتيب النتائج من الأعلى للأدنى
+        results_list.sort(key=lambda x: x['votes'], reverse=True)
         
         AuditService.log('ELECTION_DECRYPTED', 'SUCCESS', None, f"Total votes: {total_votes}")
         
         return jsonify({
             'success': True,
             'total_votes': total_votes,
-            'results': results,
-            'votes': votes
+            'results': results_list,
+            'blockchain_integrity': integrity_valid,
+            'decrypted_at': datetime.now().isoformat()
         })
     
     except Exception as e:
         error_msg = str(e)
+        error_ar = "فشل فك التشفير - تأكد من كلمة المرور"
         # Check for wrong password specific errors from cryptography
         if "padding" in error_msg.lower() or "decryption failed" in error_msg.lower():
-            error_msg = "كلمة السر خاطئة / Wrong password"
+            error_ar = "كلمة السر خاطئة - المفتاح غير متاح"
+            error_msg = "Wrong password"
             
         AuditService.log('DECRYPTION_FAILED', 'FAILED', None, error_msg)
         return jsonify({
             'success': False,
             'error': 'فك التشفير فشل / Decryption failed',
+            'error_ar': error_ar,
             'details': error_msg
         }), 400
 
