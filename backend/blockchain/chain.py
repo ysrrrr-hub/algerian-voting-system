@@ -18,8 +18,9 @@ class Blockchain:
     def create_genesis_block(self):
         """إنشاء أول كتلة في السلسلة (إذا لم تكن موجودة)"""
         cursor = self.db.cursor()
-        cursor.execute("SELECT COUNT(*) FROM blockchain WHERE block_index = 0")
-        count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) as cnt FROM blockchain WHERE block_index = 0")
+        row = cursor.fetchone()
+        count = row['cnt'] if row else 0
         cursor.close()
         
         if count > 0:
@@ -97,18 +98,18 @@ class Blockchain:
             rows = cursor.fetchall()
             
             for row in rows:
-                ts = row[1]
+                ts = row['timestamp']
                 # Ensure timestamp is UTC-aware for consistent hashing
                 if ts.tzinfo is None:
                     ts = ts.replace(tzinfo=timezone.utc)
                 block = Block(
-                    index=row[0],
+                    index=row['block_index'],
                     timestamp=ts,
-                    encrypted_vote=row[2],
-                    previous_hash=row[3],
-                    nonce=row[5]
+                    encrypted_vote=row['encrypted_vote'],
+                    previous_hash=row['previous_hash'],
+                    nonce=row['nonce']
                 )
-                block.hash = row[4]
+                block.hash = row['current_hash']
                 self.chain.append(block)
         except Exception as e:
             print(f"Error loading chain: {e}")
