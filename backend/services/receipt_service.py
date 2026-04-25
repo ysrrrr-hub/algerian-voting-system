@@ -1,10 +1,26 @@
 import secrets
-from database.connection import get_db
+import os
+import psycopg
+from psycopg.rows import dict_row
+from flask import g
+
+def _get_db():
+    """Get DB connection from Flask g context or create new one"""
+    if 'db' not in g:
+        g.db = psycopg.connect(
+            host=os.getenv('DB_HOST', 'localhost'),
+            port=int(os.getenv('DB_PORT', 5432)),
+            dbname=os.getenv('DB_NAME', 'voting_system'),
+            user=os.getenv('DB_USER', 'voting_admin'),
+            password=os.getenv('DB_PASSWORD'),
+            row_factory=dict_row
+        )
+    return g.db
 
 class ReceiptService:
     @staticmethod
     def generate_receipt(vote_hash, block_hash, block_index, election_id=1):
-        db = get_db()
+        db = _get_db()
         cursor = db.cursor()
         
         # Generate a unique receipt code format ALG-2026-XXXXXXXX
@@ -40,7 +56,7 @@ class ReceiptService:
     @staticmethod
     def verify_receipt(receipt_code):
         try:
-            db = get_db()
+            db = _get_db()
             cursor = db.cursor()
             
             cursor.execute("""

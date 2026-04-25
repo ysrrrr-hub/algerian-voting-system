@@ -1,8 +1,23 @@
 import hashlib
 import csv
+import os
+import psycopg
+from psycopg.rows import dict_row
 from io import StringIO
-from flask import request
-from database.connection import get_db
+from flask import request, g
+
+def _get_db():
+    """Get DB connection from Flask g context or create new one"""
+    if 'db' not in g:
+        g.db = psycopg.connect(
+            host=os.getenv('DB_HOST', 'localhost'),
+            port=int(os.getenv('DB_PORT', 5432)),
+            dbname=os.getenv('DB_NAME', 'voting_system'),
+            user=os.getenv('DB_USER', 'voting_admin'),
+            password=os.getenv('DB_PASSWORD'),
+            row_factory=dict_row
+        )
+    return g.db
 
 class AuditService:
     @staticmethod
@@ -23,7 +38,7 @@ class AuditService:
     @staticmethod
     def log(action_type, status='SUCCESS', nfc_uid=None, error_message=None):
         try:
-            db = get_db()
+            db = _get_db()
             cursor = db.cursor()
             ip_address, user_agent = AuditService._get_request_metadata()
             identifier_hash = AuditService._hash_identifier(nfc_uid)
@@ -50,7 +65,7 @@ class AuditService:
     @staticmethod
     def query(action_type=None, status=None, date_from=None, date_to=None, page=1, per_page=50):
         try:
-            db = get_db()
+            db = _get_db()
             cursor = db.cursor()
             
             query_base = "FROM audit_log WHERE 1=1"
@@ -96,7 +111,7 @@ class AuditService:
     @staticmethod
     def get_stats():
         try:
-            db = get_db()
+            db = _get_db()
             cursor = db.cursor()
             
             cursor.execute("SELECT COUNT(*) FROM audit_log")
@@ -129,7 +144,7 @@ class AuditService:
     @staticmethod
     def export_csv(action_type=None, status=None, date_from=None, date_to=None):
         try:
-            db = get_db()
+            db = _get_db()
             cursor = db.cursor()
             
             query = "SELECT log_id, timestamp, action_type, status, identifier_hash, ip_address, error_message FROM audit_log WHERE 1=1"
