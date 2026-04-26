@@ -85,16 +85,16 @@ class AuditService:
                 params.append(date_to)
 
             # Count total
-            cursor.execute(f"SELECT COUNT(*) {query_base}", params)
-            total = cursor.fetchone()[0]
+            cursor.execute(f"SELECT COUNT(*) as cnt {query_base}", params)
+            total = cursor.fetchone()['cnt']
 
             # Fetch records
             offset = (page - 1) * per_page
             query_records = f"SELECT log_id, action_type, nfc_uid, ip_address, user_agent, success, status, identifier_hash, error_message, timestamp {query_base} ORDER BY timestamp DESC LIMIT %s OFFSET %s"
             
             cursor.execute(query_records, params + [per_page, offset])
-            columns = [desc[0] for desc in cursor.description]
-            records = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            # Since row_factory=dict_row, fetchall returns a list of dictionaries. No zip needed.
+            records = cursor.fetchall()
             
             cursor.close()
             
@@ -114,20 +114,20 @@ class AuditService:
             db = _get_db()
             cursor = db.cursor()
             
-            cursor.execute("SELECT COUNT(*) FROM audit_log")
-            total = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) as cnt FROM audit_log")
+            total = cursor.fetchone()['cnt']
             
-            cursor.execute("SELECT COUNT(*) FROM audit_log WHERE timestamp >= NOW() - INTERVAL '24 HOURS'")
-            last_24h = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) as cnt FROM audit_log WHERE timestamp >= NOW() - INTERVAL '24 HOURS'")
+            last_24h = cursor.fetchone()['cnt']
             
-            cursor.execute("SELECT COUNT(*) FROM audit_log WHERE action_type = 'VOTE_CAST' AND timestamp >= CURRENT_DATE")
-            votes_today = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) as cnt FROM audit_log WHERE action_type = 'VOTE_CAST' AND timestamp >= CURRENT_DATE")
+            votes_today = cursor.fetchone()['cnt']
             
-            cursor.execute("SELECT COUNT(*) FROM audit_log WHERE status != 'SUCCESS' AND timestamp >= CURRENT_DATE")
-            failed_today = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) as cnt FROM audit_log WHERE status != 'SUCCESS' AND timestamp >= CURRENT_DATE")
+            failed_today = cursor.fetchone()['cnt']
             
             cursor.execute("SELECT action_type, COUNT(*) as count FROM audit_log GROUP BY action_type ORDER BY count DESC LIMIT 5")
-            top_actions = [{"action_type": row[0], "count": row[1]} for row in cursor.fetchall()]
+            top_actions = [{"action_type": row['action_type'], "count": row['count']} for row in cursor.fetchall()]
             
             cursor.close()
             return {
@@ -139,7 +139,7 @@ class AuditService:
             }
         except Exception as e:
             print(f"Error getting audit stats: {e}")
-            return {"total": 0, "last_24h": 0, "votes_today": 0, "failed_today": 0, "top_actions": []}
+            raise e
 
     @staticmethod
     def export_csv(action_type=None, status=None, date_from=None, date_to=None):
@@ -172,10 +172,11 @@ class AuditService:
             si = StringIO()
             cw = csv.writer(si)
             cw.writerow(columns)
-            cw.writerows(records)
+            # records are dicts, we need lists of values matched to columns
+            cw.writerows([[r[col] for col in columns] for r in records])
             
             cursor.close()
             return si.getvalue()
         except Exception as e:
             print(f"Error exporting audit log: {e}")
-            return ""
+            raise e
