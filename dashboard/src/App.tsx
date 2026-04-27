@@ -16,6 +16,8 @@ import {
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ResultsPage from './pages/ResultsPage';
+import AuditLogPage from './pages/AuditLogPage';
+import BlockchainExplorerPage from './pages/BlockchainExplorerPage';
 import VerifyReceipt from './pages/VerifyReceipt';
 import CandidatesPage from './pages/admin/CandidatesPage';
 import { apiLogout } from './services/api';

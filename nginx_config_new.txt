@@ -1,0 +1,106 @@
+server {
+server_name evotingdz.live www.evotingdz.live 209.38.44.237;
+
+client_max_body_size 20M;
+
+# ========== Kiosk Web App ==========
+location /kiosk {
+alias /opt/algerian-voting-system/kiosk_web;
+index index.html;
+try_files $uri $uri/ /kiosk/index.html;
+
+# CORS for API calls
+add_header Access-Control-Allow-Origin "*" always;
+
+# Cache static assets
+location ~* \.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf)$ {
+expires 30d;
+add_header Cache-Control "public, immutable";
+}
+}
+
+# ========== Dashboard (React) ==========
+location / {
+proxy_pass http://127.0.0.1:3000;
+proxy_http_version 1.1;
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+proxy_read_timeout 300;
+}
+
+# ========== Uploaded Files (Candidates Photos) ==========
+location /uploads/ {
+    alias /opt/algerian-voting-system/uploads/;
+    expires 1h;
+    add_header Cache-Control "public";
+    autoindex on;
+}
+
+# ========== Backend API ==========
+location /api/ {
+proxy_pass http://127.0.0.1:5000;
+proxy_http_version 1.1;
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_read_timeout 300;
+
+add_header Access-Control-Allow-Origin "*" always;
+add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
+add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With" always;
+
+if ($request_method = OPTIONS) {
+return 204;
+}
+}
+
+# ========== Socket.IO (WebSocket) ==========
+location /socket.io/ {
+proxy_pass http://127.0.0.1:5000;
+proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_read_timeout 86400;
+}
+
+access_log /var/log/nginx/voting-access.log;
+error_log /var/log/nginx/voting-error.log;
+
+    listen [::]:443 ssl ipv6only=on; # managed by Certbot
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/evotingdz.live/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/evotingdz.live/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+
+}
+server {
+    if ($host = www.evotingdz.live) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
+    if ($host = evotingdz.live) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
+listen 80 default_server;
+listen [::]:80 default_server;
+server_name evotingdz.live www.evotingdz.live 209.38.44.237;
+    return 404; # managed by Certbot
+}

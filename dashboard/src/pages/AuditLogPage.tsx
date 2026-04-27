@@ -213,7 +213,7 @@ const AuditLogPage: React.FC<{ token: string }> = ({ token }) => {
                     <TableCell>
                       {log.status === 'SUCCESS' ? <CheckCircle sx={{ color: '#28A745', fontSize: 18 }} /> : log.status === 'WARNING' ? <Warning sx={{ color: '#FFC107', fontSize: 18 }} /> : <Cancel sx={{ color: '#D21034', fontSize: 18 }} />}
                     </TableCell>
-                    <TableCell sx={{ fontFamily: 'Tajawal', fontSize: 11, color: '#D21034', maxWidth: 200 }}>
+                    <TableCell sx={{ fontFamily: 'Tajawal', fontSize: 11, maxWidth: 200 }}>
                       <Box sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.error_message ?? '—'}</Box>
                     </TableCell>
                   </TableRow>

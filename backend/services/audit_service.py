@@ -36,7 +36,9 @@ class AuditService:
             return None, None
 
     @staticmethod
-    def log(action_type, status='SUCCESS', nfc_uid=None, error_message=None):
+    def log(action_type, status='SUCCESS', nfc_uid=None, error_message=None, details=None):
+        # Use details if provided, otherwise error_message
+        msg = details or error_message
         try:
             db = _get_db()
             cursor = db.cursor()
@@ -55,7 +57,7 @@ class AuditService:
                 status == 'SUCCESS',
                 status,
                 identifier_hash,
-                error_message
+                msg
             ))
             db.commit()
             cursor.close()
