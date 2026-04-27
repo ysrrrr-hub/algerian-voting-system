@@ -6,16 +6,19 @@ from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 import psycopg
 from psycopg.rows import dict_row
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
+
+from core.config import Config
 
 from blockchain.chain import Blockchain
 from services.audit_service import AuditService
 from services.receipt_service import ReceiptService
+from .admin_candidates import admin_candidates_bp
 import io
 import csv
-from flask import Response
+from flask import Response, send_from_directory
 
 # تحميل المتغيرات البيئية
 load_dotenv()
@@ -84,6 +87,17 @@ def root():
         }
     })
 
+app.register_blueprint(admin_candidates_bp, url_prefix='/api/admin/candidates')
+
+@app.route('/uploads/<path:filename>')
+def serve_upload(filename):
+    """تقديم الملفات المرفوعة (صور المرشحين)"""
+    return send_from_directory(
+        '/opt/algerian-voting-system/uploads',
+        filename,
+        max_age=3600
+    )
+
 # ==================== Authentication ====================
 
 @app.route('/api/admin/login', methods=['POST'])
@@ -109,12 +123,21 @@ def admin_login():
         pw_hash = row['password_hash'].encode() if isinstance(row['password_hash'], str) else row['password_hash']
         if bcrypt.checkpw(password.encode('utf-8'), pw_hash):
             token = secrets.token_hex(32)
+            
+            # حفظ الجلسة في قاعدة البيانات
+            expires_at = datetime.now() + timedelta(hours=Config.SESSION_EXPIRY_HOURS)
+            cursor.execute(
+                "INSERT INTO admin_sessions (admin_id, token, expires_at) VALUES (%s, %s, %s)",
+                (row['admin_id'], token, expires_at)
+            )
+            db.commit()
+            
             AuditService.log('ADMIN_LOGIN_SUCCESS', 'SUCCESS', None)
             return jsonify({
                 'success': True,
                 'token': token,
                 'username': username,
-                'expires_in': 3600
+                'expires_in': Config.SESSION_EXPIRY_HOURS * 3600
             })
 
     AuditService.log('ADMIN_LOGIN_FAILED', 'FAILED', None, 'Invalid credentials')

@@ -1,0 +1,5 @@
+DELETE FROM votes;
+DELETE FROM blockchain;
+DELETE FROM vote_receipts;
+DELETE FROM audit_log WHERE action_type IN ('VOTE_CAST', 'RECEIPT_GENERATED', 'RECEIPT_VERIFIED', 'ELECTION_DECRYPTED', 'DECRYPTION_FAILED');
+UPDATE voters SET has_voted = false;

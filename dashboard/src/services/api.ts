@@ -83,6 +83,18 @@ export interface DecryptResponse {
   results:     DecryptResult[];
 }
 
+export interface Candidate {
+  id: number;
+  name_ar: string;
+  name_fr: string;
+  party_ar?: string;
+  party_fr?: string;
+  color: string;
+  photo_url?: string;
+  bio_ar?: string;
+  bio_fr?: string;
+}
+
 export interface WilayaStats {
   wilaya:       string;
   total_voters: number;
@@ -108,6 +120,35 @@ export const apiDecryptVotes = (token: string, password: string) =>
     { private_key_password: password },
     { headers: { Authorization: `Bearer ${token}` } },
   );
+
+/** Helper for Admin Auth Headers */
+const getAuthHeaders = (token?: string) => {
+  const t = token || localStorage.getItem('admin_token');
+  return t ? { Authorization: `Bearer ${t}` } : {};
+};
+
+/** إدارة المرشحين (Admin Only) */
+export const adminCandidatesApi = {
+  list: (token: string) => 
+    http.get<Candidate[]>('/api/admin/candidates', {
+      headers: getAuthHeaders(token)
+    }),
+    
+  create: (token: string, formData: FormData) =>
+    http.post('/api/admin/candidates', formData, {
+      headers: { ...getAuthHeaders(token), 'Content-Type': 'multipart/form-data' }
+    }),
+    
+  update: (token: string, id: number, formData: FormData) =>
+    http.post(`/api/admin/candidates/${id}`, formData, {
+      headers: { ...getAuthHeaders(token), 'Content-Type': 'multipart/form-data' }
+    }),
+    
+  delete: (token: string, id: number) =>
+    http.delete(`/api/admin/candidates/${id}`, {
+      headers: getAuthHeaders(token)
+    })
+};
 
 export default http;
 

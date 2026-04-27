@@ -1,0 +1,6 @@
+sudo -u postgres psql voting_system -c "SELECT COUNT(*) FROM votes;"
+sudo -u postgres psql voting_system -c "SELECT COUNT(*) FROM blockchain;"
+sudo -u postgres psql voting_system -c "SELECT COUNT(*) FROM audit_log;"
+sudo -u postgres psql voting_system -c "SELECT COUNT(*) FROM vote_receipts;"
+sudo -u postgres psql voting_system -c "SELECT COUNT(*) FROM voters WHERE has_voted=TRUE;"
+sudo -u postgres psql voting_system -c "SELECT id, action_type, voter_id, timestamp FROM audit_log ORDER BY timestamp DESC LIMIT 10"
