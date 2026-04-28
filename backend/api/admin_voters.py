@@ -205,6 +205,12 @@ def create_voter():
 @require_admin_auth
 def update_voter(voter_id):
     data = request.get_json(silent=True) or {}
+    
+    # Run validation checks on the supplied data
+    errors = validate_voter_data(data)
+    if errors:
+        return jsonify({"error": " | ".join(errors)}), 400
+        
     try:
         with get_db_conn() as conn:
             with conn.cursor() as cur:
