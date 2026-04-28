@@ -17,6 +17,7 @@ from services.audit_service import AuditService
 from services.receipt_service import ReceiptService
 from .admin_candidates import admin_candidates_bp
 from .admin_voters import admin_voters_bp
+from .admin_elections import admin_elections_bp
 from .mock_anie import anie_bp
 import io
 import csv
@@ -91,6 +92,7 @@ def root():
 
 app.register_blueprint(admin_candidates_bp, url_prefix='/api/admin/candidates')
 app.register_blueprint(admin_voters_bp, url_prefix='/api/admin/voters')
+app.register_blueprint(admin_elections_bp, url_prefix='/api/admin/elections')
 app.register_blueprint(anie_bp, url_prefix='/api/anie')
 
 @app.route('/uploads/<path:filename>')
@@ -239,6 +241,25 @@ def cast_vote():
     try:
         cursor = db.cursor()
         
+        # 0. Check Election Status (Must be OPEN)
+        cursor.execute("SELECT status FROM elections ORDER BY id DESC LIMIT 1")
+        election = cursor.fetchone()
+        
+        if not election or election['status'] != 'OPEN':
+            status = election['status'] if election else 'NONE'
+            AuditService.log('VOTE_REJECTED_ELECTION_CLOSED', 'FAILED', nfc_uid, f'Election status: {status}')
+            if status == 'SCHEDULED':
+                msg = 'الانتخاب لم يبدأ بعد / Election not started yet'
+            elif status in ('CLOSED', 'PRELIMINARY'):
+                msg = 'الانتخاب أُقفل، التصويت غير ممكن / Election is closed'
+            elif status == 'DRAFT':
+                msg = 'الانتخاب لم يُنشَر بعد / Election not published'
+            elif status == 'CANCELLED':
+                msg = 'الانتخاب أُلغي / Election cancelled'
+            else:
+                msg = 'التصويت غير متاح حالياً / Voting unavailable'
+            return jsonify({'error': msg}), 403
+            
         # 1. جلب الناخب مع LOCK (يمنع race condition)
         # Select voter properties FOR UPDATE within transaction
         cursor.execute("SELECT voter_id, has_voted, voted_at FROM voters WHERE nfc_uid = %s FOR UPDATE", (nfc_uid,))
