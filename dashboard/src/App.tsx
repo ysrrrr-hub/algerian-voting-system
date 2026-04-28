@@ -20,8 +20,9 @@ import AuditLogPage from './pages/AuditLogPage';
 import BlockchainExplorerPage from './pages/BlockchainExplorerPage';
 import VerifyReceipt from './pages/VerifyReceipt';
 import CandidatesPage from './pages/admin/CandidatesPage';
+import VotersPage from './pages/admin/VotersPage';
 import { apiLogout } from './services/api';
-import { People } from '@mui/icons-material';
+import { People, Group } from '@mui/icons-material';
 
 // ─── Algerian Theme ───────────────────────────────────────────
 const theme = createTheme({
@@ -150,6 +151,20 @@ const NavBar: React.FC<{
         </Button>
 
         <Button
+          component={Link} to="/admin/voters"
+          startIcon={<Group />}
+          variant={loc.pathname === '/admin/voters' ? 'contained' : 'text'}
+          size="small"
+          sx={{
+            fontFamily: 'Tajawal', fontSize: 13,
+            bgcolor: loc.pathname === '/admin/voters' ? '#1565C0' : 'transparent',
+            color:   loc.pathname === '/admin/voters' ? '#fff' : '#5A7062',
+          }}
+        >
+          الناخبون
+        </Button>
+
+        <Button
           component={Link} to="/verify"
           startIcon={<CheckCircle />}
           variant={loc.pathname.startsWith('/verify') ? 'contained' : 'text'}
@@ -233,6 +248,7 @@ const App: React.FC = () => {
                     <Route path="/explorer" element={<BlockchainExplorerPage />} />
                     <Route path="/audit"    element={<AuditLogPage token={token} />} />
                     <Route path="/admin/candidates" element={<CandidatesPage token={token} />} />
+                    <Route path="/admin/voters" element={<VotersPage token={token} />} />
                     <Route path="*"         element={<Navigate to="/" replace />} />
                   </Routes>
                 </Box>
