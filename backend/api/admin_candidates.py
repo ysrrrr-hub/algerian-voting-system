@@ -171,18 +171,38 @@ def update_candidate(candidate_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@admin_candidates_bp.route('/<int:candidate_id>', methods=['DELETE'])
+@admin_candidates_bp.route('/<int:candidate_id>/delete', methods=['POST'])
 @require_admin_auth
 def delete_candidate(candidate_id):
     try:
+        import bcrypt
+        data = request.get_json(silent=True) or {}
+        admin_password = data.get('admin_password')
+        
+        if not admin_password:
+            return jsonify({"error": "يرجى إدخال كلمة مرور المشرف للتأكيد"}), 400
+            
         with get_db_conn() as conn:
             with conn.cursor() as cur:
-                # Check for votes
+                # 1. Verify Admin Password
+                cur.execute("SELECT password_hash FROM admin_users WHERE admin_id = %s", (request.admin_id,))
+                admin = cur.fetchone()
+                
+                if not admin:
+                    AuditService.log('CANDIDATE_DELETE_AUTH_FAILED', status='FAILED', details=f"Admin {request.admin_id} not found")
+                    return jsonify({"error": "المشرف غير موجود"}), 404
+                    
+                pw_hash = admin['password_hash'].encode() if isinstance(admin['password_hash'], str) else admin['password_hash']
+                if not bcrypt.checkpw(admin_password.encode('utf-8'), pw_hash):
+                    AuditService.log('CANDIDATE_DELETE_AUTH_FAILED', status='FAILED', details=f"Wrong password for Admin {request.admin_id}")
+                    return jsonify({"error": "كلمة المرور غير صحيحة"}), 401
+                
+                # 2. Check for votes
                 cur.execute("SELECT COUNT(*) as count FROM votes WHERE candidate_id = %s", (candidate_id,))
                 if cur.fetchone()['count'] > 0:
                     return jsonify({"error": "لا يمكن حذف مرشح صوّت له ناخبون / Cannot delete candidate with votes"}), 400
                 
-                # Get photo path
+                # 3. Get photo path
                 cur.execute("SELECT photo_url FROM candidates WHERE candidate_id = %s", (candidate_id,))
                 row = cur.fetchone()
                 if row and row['photo_url']:
@@ -191,6 +211,7 @@ def delete_candidate(candidate_id):
                                 try: os.remove(path)
                                 except: pass
                                 
+                # 4. Perform Delete
                 cur.execute("DELETE FROM candidates WHERE candidate_id = %s", (candidate_id,))
                 conn.commit()
                 
