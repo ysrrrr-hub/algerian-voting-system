@@ -16,6 +16,8 @@ from blockchain.chain import Blockchain
 from services.audit_service import AuditService
 from services.receipt_service import ReceiptService
 from .admin_candidates import admin_candidates_bp
+from .admin_voters import admin_voters_bp
+from .mock_anie import anie_bp
 import io
 import csv
 from flask import Response, send_from_directory
@@ -88,6 +90,8 @@ def root():
     })
 
 app.register_blueprint(admin_candidates_bp, url_prefix='/api/admin/candidates')
+app.register_blueprint(admin_voters_bp, url_prefix='/api/admin/voters')
+app.register_blueprint(anie_bp, url_prefix='/api/anie')
 
 @app.route('/uploads/<path:filename>')
 def serve_upload(filename):

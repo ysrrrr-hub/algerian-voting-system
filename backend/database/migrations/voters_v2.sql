@@ -1,0 +1,9 @@
+ALTER TABLE voters ADD COLUMN IF NOT EXISTS gender VARCHAR(1) CHECK (gender IN ('M','F'));
+ALTER TABLE voters ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+ALTER TABLE voters ADD COLUMN IF NOT EXISTS national_id VARCHAR(20) UNIQUE;
+ALTER TABLE voters ADD COLUMN IF NOT EXISTS commune VARCHAR(100);
+ALTER TABLE voters ADD COLUMN IF NOT EXISTS phone VARCHAR(20);
+
+CREATE INDEX IF NOT EXISTS idx_voters_national_id ON voters(national_id);
+CREATE INDEX IF NOT EXISTS idx_voters_email ON voters(email);
+CREATE INDEX IF NOT EXISTS idx_voters_gender ON voters(gender);
