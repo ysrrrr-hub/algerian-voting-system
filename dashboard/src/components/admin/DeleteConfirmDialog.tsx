@@ -14,7 +14,7 @@ interface Props {
 }
 
 const DeleteConfirmDialog: React.FC<Props> = ({ open, onClose, candidate, token, onSuccess }) => {
-  const [confirmName, setConfirmName] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -24,12 +24,16 @@ const DeleteConfirmDialog: React.FC<Props> = ({ open, onClose, candidate, token,
     setLoading(true);
     setError('');
     try {
-      await adminCandidatesApi.delete(token, candidate.id);
-      setConfirmName('');
+      const res: any = await adminCandidatesApi.delete(token, candidate.id, password);
+      if (res.data?.error) {
+         setError(res.data.error);
+         return;
+      }
+      setPassword('');
       onSuccess();
       onClose();
     } catch (err: any) {
-      setError(err.response?.data?.error || 'فشل الحذف. قد يكون للمرشح أصوات مسجلة.');
+      setError(err.response?.data?.error || 'فشل الحذف. تأكد من كلمة المرور أو وجود أصوات مسجلة.');
     } finally {
       setLoading(false);
     }
@@ -50,12 +54,12 @@ const DeleteConfirmDialog: React.FC<Props> = ({ open, onClose, candidate, token,
         
         <Box sx={{ mt: 3, p: 2, bgcolor: '#fff5f5', borderRadius: 1, border: '1px solid #ffdada' }}>
           <Typography variant="body2" color="error" sx={{ mb: 1 }}>
-            لتأكيد الحذف، يرجى كتابة اسم المرشح (<strong>{candidate.name_ar}</strong>) في الحقل أدناه:
+            لتأكيد الحذف، يرجى إدخال كلمة مرور المشرف / Admin Password:
           </Typography>
           <TextField 
-            fullWidth size="small" value={confirmName}
-            onChange={e => setConfirmName(e.target.value)}
-            placeholder="اكتب الاسم هنا"
+            fullWidth size="small" type="password" value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="كلمة مرور المسؤول"
           />
         </Box>
         
@@ -66,7 +70,7 @@ const DeleteConfirmDialog: React.FC<Props> = ({ open, onClose, candidate, token,
         <Button 
           onClick={handleDelete} 
           variant="contained" 
-          disabled={loading || confirmName !== candidate.name_ar}
+          disabled={loading || !password}
           sx={{ bgcolor: '#D21034', '&:hover': { bgcolor: '#a00d27' } }}
         >
           {loading ? 'جاري الحذف...' : 'تأكيد الحذف النهائي'}

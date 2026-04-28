@@ -144,9 +144,9 @@ export const adminCandidatesApi = {
       headers: { ...getAuthHeaders(token), 'Content-Type': 'multipart/form-data' }
     }),
     
-  delete: (token: string, id: number) =>
-    http.delete(`/api/admin/candidates/${id}`, {
-      headers: getAuthHeaders(token)
+  delete: (token: string, id: number, adminPassword?: string) =>
+    http.post(`/api/admin/candidates/${id}/delete`, { admin_password: adminPassword }, {
+      headers: { ...getAuthHeaders(token), 'Content-Type': 'application/json' }
     })
 };
 
