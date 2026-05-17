@@ -1,5 +1,6 @@
 import secrets
 import os
+from datetime import datetime
 import psycopg
 from psycopg.rows import dict_row
 from flask import g
@@ -40,17 +41,19 @@ class ReceiptService:
         """, (receipt_code, vote_hash, block_hash, block_index, election_id))
         
         cursor.close()
-        # Note: Do not commit here if it's meant to be within a broader transaction.
-        # It's better not to call db.commit() here since the route will call it at the very end to keep Atomicity!
-        # The prompt says: "بعد commit الناجح، استدع ReceiptService.generate_receipt() ضمن نفس transaction (أو بعدها مباشرة)"
-        # So we won't call commit here if we don't need to, but the method needs to be resilient.
+        # The main vote transaction already committed in routes.py,
+        # so this is a new implicit transaction — commit it now.
+        db.commit()
         
         return {
-            "code": receipt_code,
+            "receipt_code": receipt_code,
             "verification_url": f"https://evotingdz.live/verify/{receipt_code}",
             "qr_data": f"https://evotingdz.live/verify/{receipt_code}",
             "block_hash": block_hash,
-            "block_index": block_index
+            "block_index": block_index,
+            "timestamp": datetime.now().isoformat(),
+            "privacy_note_ar": "🔒 لا يكشف هذا الوصل عن المرشّح الذي صوّتَ له — السرية محفوظة",
+            "privacy_note_fr": "🔒 Confidentialité préservée — Ce reçu ne révèle pas le candidat"
         }
 
     @staticmethod
